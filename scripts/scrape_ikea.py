@@ -1,116 +1,154 @@
-from playwright.sync_api import sync_playwright
-import json
 import re
+import csv
 import os
+import urllib.parse
 import requests
-import time
+from playwright.sync_api import sync_playwright
 
 CATEGORY_URL = "https://www.ikea.com/de/en/cat/desks-computer-desks-20649/"
-MODEL_DIR = "models"
 
-os.makedirs(MODEL_DIR, exist_ok=True)
+# ---- YOUR working product link fetcher ----
+def get_product_urls(page, category_url):
+    page.goto(category_url)
+    page.wait_for_selector("a[href*='/p/']")
+    product_links = list({a.get_attribute("href") for a in page.query_selector_all("a[href*='/p/']")})
+    print(f"Found {len(product_links)} desks")
 
-def safe_filename(name):
-    return re.sub(r'[<>:"/\\|?*]', '', name)
+    products = []
+    for link in product_links:
+        full_url = link if link.startswith("http") else "https://www.ikea.com" + link
+        print(f"Scraping {full_url}...")
+        products.append(full_url)
 
-def scrape_desks():
-    results = []
+    return products
 
+
+# ---- My improved detail scraper ----
+def fetch_ikea_data(product_urls, output_csv="ikea_products.csv"):
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        browser = p.chromium.launch(headless=False)
         context = browser.new_context()
         page = context.new_page()
 
-        # Get all product links from category page
-        page.goto(CATEGORY_URL)
-        page.wait_for_selector("a[href*='/p/']")
-        product_links = list({a.get_attribute("href") for a in page.query_selector_all("a[href*='/p/']")})
-        print(f"Found {len(product_links)} desks")
+        csv_headers = ["Name", "Dimensions", "3D Model URL", "Product URL"]
+        with open(output_csv, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(csv_headers)
 
-        for link in product_links:
-            full_url = link if link.startswith("http") else "https://www.ikea.com" + link
-            print(f"Scraping {full_url}...")
+            glb_url_container = {"url": None}
 
-            glb_url = None
-
-            # Intercept requests
             def on_request(req):
-                nonlocal glb_url
                 if ".glb" in req.url or "glb_draco" in req.url:
-                    glb_url = req.url
+                    glb_url_container["url"] = req.url
+
             context.on("request", on_request)
 
-            page.goto(full_url)
-            page.wait_for_load_state("domcontentloaded")
+            for full_url in product_urls:
+                print(f"Processing {full_url}...")
+                glb_url_container["url"] = None
 
-            # Get product name
-            try:
-                name = page.query_selector(".pip-price-module__name-decorator").inner_text().strip()
-            except:
-                name = "unknown"
+                page.goto(full_url)
+                page.wait_for_load_state("domcontentloaded")
 
-            # Get dimensions
-            dims = {}
-            try:
-                detail_section = page.query_selector("div#pip-product-details")
-                if detail_section:
-                    text = detail_section.inner_text()
-                    for dim in ["Width", "Depth", "Height"]:
-                        m = re.search(rf"{dim}:\s*([\d.,]+)\s*cm", text)
-                        if m:
-                            dims[dim] = m.group(1) + " cm"
-            except:
-                pass
-
-            # Click the 3D button to trigger GLB load
-            try:
-                btn = page.query_selector(".pip-xr-button")
-                if btn:
-                    btn.click()
-                    # page.wait_for_timeout(4000)  # Wait for model request
-                for _ in range(30):
-                    if glb_url:
-                        break
-                    context.on("request", on_request)
-                    time.sleep(0.5)
-            except:
-                pass
-
-            # Download the model
-            model_path = None
-            if glb_url and glb_url.startswith("http"):
+                # --- Name ---
                 try:
-                    # Extract article number from URL
-                    article_match = re.search(r'/p/[^/]+-(\d{8})/', full_url)
-                    article_id = article_match.group(1) if article_match else "noid"
+                    name = page.query_selector(
+                        ".pip-price-module__name-decorator"
+                    ).inner_text().strip()
+                except:
+                    name = "unknown"
 
-                    filename = f"{safe_filename(name)}_{article_id}" or "ikea_product"
-                    model_path = os.path.join(MODEL_DIR, filename + ".glb")
-                    print(f"  Downloading model: {model_path}")
-                    r = requests.get(glb_url)
-                    r.raise_for_status()
-                    with open(model_path, "wb") as f:
-                        f.write(r.content)
-                except Exception as e:
-                    print(f"  Failed to download model: {e}")
-            else:
-                print("  No 3D model found")
+                # --- Dimensions ---
+                dims = {}
+                try:
+                    detail_section = page.query_selector("div#pip-product-details")
+                    if detail_section:
+                        text = detail_section.inner_text()
+                        for dim in ["Width", "Depth", "Height"]:
+                            m = re.search(rf"{dim}:\s*([\d.,]+)\s*cm", text)
+                            if m:
+                                dims[dim] = m.group(1) + " cm"
+                except:
+                    pass
 
-            results.append({
-                "name": name,
-                "url": full_url,
-                "dimensions": dims,
-                "model_url": glb_url,
-                "model_file": model_path
-            })
+                dims_str = ", ".join(f"{k}: {v}" for k, v in dims.items())
+
+                # --- Click 3D button if exists ---
+                if click_3d_button(page):
+                    # Wait for GLB request
+                    try:
+                        req = page.wait_for_event(
+                            "request",
+                            lambda r: (".glb" in r.url or "glb_draco" in r.url),
+                            timeout=10000
+                        )
+                        glb_url_container["url"] = req.url
+                    except:
+                        pass
+
+                glb_url = glb_url_container["url"]
+
+                # --- Image ---
+                img_url = None
+                try:
+                    img = page.query_selector("picture img")
+                    if img:
+                        src = img.get_attribute("src")
+                        if src:
+                            img_url = urllib.parse.urljoin(full_url, src)
+                except:
+                    pass
+
+                # Save CSV row
+                writer.writerow([name, dims_str, glb_url, full_url])
+
+                # --- Download files ---
+                safe_name = re.sub(r"[^a-zA-Z0-9_-]", "_", name)
+                os.makedirs("ikea_downloads", exist_ok=True)
+
+                if glb_url:
+                    try:
+                        r = requests.get(glb_url, timeout=20)
+                        with open(f"ikea_downloads/{safe_name}.glb", "wb") as f_glb:
+                            f_glb.write(r.content)
+                    except Exception as e:
+                        print(f"Failed to download GLB for {name}: {e}")
+
+                if img_url:
+                    try:
+                        r = requests.get(img_url, timeout=20)
+                        with open(f"ikea_downloads/{safe_name}.jpg", "wb") as f_img:
+                            f_img.write(r.content)
+                    except Exception as e:
+                        print(f"Failed to download image for {name}: {e}")
 
         browser.close()
+        
+def click_3d_button(page):
+    try:
+        # Scroll to bottom to trigger lazy loading
+        page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+        page.wait_for_timeout(2000)
 
-    return results
+        # Wait up to 10s for the button to appear
+        page.wait_for_selector(".pip-xr-button", timeout=10000)
+        btn = page.query_selector(".pip-xr-button")
+
+        if btn and btn.is_enabled():
+            btn.click()
+            return True
+    except:
+        pass
+    return False
+
 
 
 if __name__ == "__main__":
-    desks = scrape_desks()
-    with open("ikea_desks.json", "w", encoding="utf-8") as f:
-        json.dump(desks, f, indent=2, ensure_ascii=False)
-    print("Saved ikea_desks.json and models/")
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=False)
+        page = browser.new_page()
+        product_links = get_product_urls(page, CATEGORY_URL)
+        browser.close()
+
+    print(f"Found {len(product_links)} product links.")
+    fetch_ikea_data(product_links)
