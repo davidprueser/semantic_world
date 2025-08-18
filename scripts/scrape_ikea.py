@@ -7,7 +7,6 @@ from playwright.sync_api import sync_playwright
 
 CATEGORY_URL = "https://www.ikea.com/de/en/cat/desks-computer-desks-20649/"
 
-# ---- YOUR working product link fetcher ----
 def get_product_urls(page, category_url):
     page.goto(category_url)
     page.wait_for_selector("a[href*='/p/']")
@@ -22,8 +21,10 @@ def get_product_urls(page, category_url):
 
     return products
 
+def get_product_id_from_url(url):
+    match = re.search(r"(\d{8})", url)
+    return match.group(1) if match else None
 
-# ---- My improved detail scraper ----
 def fetch_ikea_data(product_urls, output_csv="ikea_products.csv"):
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=False)
@@ -103,7 +104,10 @@ def fetch_ikea_data(product_urls, output_csv="ikea_products.csv"):
                 writer.writerow([name, dims_str, glb_url, full_url])
 
                 # --- Download files ---
+                product_id = get_product_id_from_url(full_url)
                 safe_name = re.sub(r"[^a-zA-Z0-9_-]", "_", name)
+                if product_id:
+                    safe_name = f"{safe_name}_{product_id}"
                 os.makedirs("ikea_downloads", exist_ok=True)
 
                 if glb_url:
@@ -113,14 +117,6 @@ def fetch_ikea_data(product_urls, output_csv="ikea_products.csv"):
                             f_glb.write(r.content)
                     except Exception as e:
                         print(f"Failed to download GLB for {name}: {e}")
-
-                if img_url:
-                    try:
-                        r = requests.get(img_url, timeout=20)
-                        with open(f"ikea_downloads/{safe_name}.jpg", "wb") as f_img:
-                            f_img.write(r.content)
-                    except Exception as e:
-                        print(f"Failed to download image for {name}: {e}")
 
         browser.close()
         
