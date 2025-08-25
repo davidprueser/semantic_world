@@ -6,7 +6,7 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from enum import IntEnum
 from functools import wraps, lru_cache
-from typing import Dict, Tuple, OrderedDict, Union, Optional
+from typing import Dict, Tuple, OrderedDict, Union, Optional, Generic, TypeVar
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -15,7 +15,13 @@ import rustworkx.visit
 import rustworkx.visualization
 from typing_extensions import List, Type
 
-from .connections import HasUpdateState, Has1DOFState, Connection6DoF
+from .connections import (
+    HasUpdateState,
+    Has1DOFState,
+    Connection6DoF,
+    ActiveConnection,
+    PassiveConnection,
+)
 from .degree_of_freedom import DegreeOfFreedom
 from .exceptions import DuplicateViewError, AddingAnExistingViewError, ViewNotFoundError
 from .ik_solver import InverseKinematicsSolver
@@ -31,6 +37,8 @@ from .world_state import WorldState
 logger = logging.getLogger(__name__)
 
 id_generator = IDGenerator()
+
+T = TypeVar("T")
 
 
 class PlotAlignment(IntEnum):
@@ -294,8 +302,12 @@ class World:
         return True
 
     @modifies_world
-    def create_degree_of_freedom(self, name: PrefixedName, lower_limits: Optional[DerivativeMap[float]] = None,
-                                 upper_limits: Optional[DerivativeMap[float]] = None) -> DegreeOfFreedom:
+    def create_degree_of_freedom(
+        self,
+        name: PrefixedName,
+        lower_limits: Optional[DerivativeMap[float]] = None,
+        upper_limits: Optional[DerivativeMap[float]] = None,
+    ) -> DegreeOfFreedom:
         """
         Create a degree of freedom in the world and return it.
         For dependent kinematics, DoFs must be created with this method and passed to the connection's conctructor.
@@ -304,7 +316,22 @@ class World:
         :param upper_limits: If the DoF is actively controlled, it must have at least velocity limits.
         :return: The already registered DoF.
         """
-        dof = DegreeOfFreedom(name=name, lower_limits=lower_limits, upper_limits=upper_limits, _world=self)
+        dof = DegreeOfFreedom(
+            name=name, lower_limits=lower_limits, upper_limits=upper_limits, _world=self
+        )
+        self.register_degree_of_freedom(dof)
+        return dof
+
+    @modifies_world
+    def register_degree_of_freedom(self, dof: DegreeOfFreedom) -> None:
+        """
+        Register a degree of freedom in the world.
+        This is used to register DoFs that are not created by the world, but are part of the world model.
+        :param dof: The degree of freedom to register.
+        """
+        if dof in self.degrees_of_freedom:
+            logger.debug(f"Degree of freedom {dof.name} already registered in world {self.name}.")
+            return
         initial_position = 0
         lower_limit = dof.lower_limits.position
         if lower_limit is not None:
@@ -312,10 +339,9 @@ class World:
         upper_limit = dof.upper_limits.position
         if upper_limit is not None:
             initial_position = min(upper_limit, initial_position)
-        self.state[name].position = initial_position
-        assert [dof for dof in self.degrees_of_freedom if dof.name == name].count(dof) == 0
+        self.state[dof.name].position = initial_position
         self.degrees_of_freedom.append(dof)
-        return dof
+
 
     def modify_world(self) -> WorldModelUpdateContextManager:
         return WorldModelUpdateContextManager(self)
@@ -360,10 +386,17 @@ class World:
             # self._fix_tree_structure()
             self.reset_cache()
             self.compile_forward_kinematics_expressions()
-            # self._cleanup_unused_dofs()
+            self.deleted_orphaned_dof()
             self.notify_state_change()
             self._model_version += 1
             self.validate()
+
+    def deleted_orphaned_dof(self):
+        actual_dofs = set()
+        for connection in self.connections:
+            actual_dofs.update(connection.dofs)
+        self.degrees_of_freedom = list(actual_dofs)
+
 
     @property
     def bodies(self) -> List[Body]:
@@ -459,6 +492,16 @@ class World:
             return matches[0]
         raise ViewNotFoundError(name)
 
+    def get_views_by_type(self, view_type: Type[Generic[T]]) -> List[T]:
+        """
+        Retrieves all views of a specific type from the world.
+
+        :param view_type: The class (type) of the views to search for.
+        :return: A list of `View` objects that match the given type.
+        """
+        return [view for view in self.views if isinstance(view, view_type)]
+
+
     @modifies_world
     def remove_body(self, body: Body) -> None:
         if body._world is self and body.index is not None:
@@ -467,6 +510,26 @@ class World:
             body.index = None
         else:
             logger.debug("Trying to remove a body that is not part of this world.")
+
+    @modifies_world
+    def remove_connection(self, connection: Connection) -> None:
+        """
+        Removes a connection and deletes the corresponding degree of freedom, if it was only used by this connection.
+        Might create disconnected bodies, so make sure to add a new connection or delete the child body.
+
+        :param connection: The connection to be removed
+        """
+        remaining_dofs = set()
+        for remaining_connection in self.connections:
+            if remaining_connection == connection:
+                continue
+            remaining_dofs.update(remaining_connection.dofs)
+
+        for dof in connection.dofs:
+            if dof not in remaining_dofs:
+                self.degrees_of_freedom.remove(dof)
+                del self.state[dof.name]
+        self.kinematic_structure.remove_edge(connection.parent.index, connection.child.index)
 
     @modifies_world
     def merge_world(self, other: World, root_connection: Connection = None) -> None:
@@ -495,11 +558,23 @@ class World:
             other.remove_body(connection.parent)
             other.remove_body(connection.child)
             self.add_connection(connection)
+        for body in other.bodies:
+            if body._world is not None:
+                other.remove_body(body)
+
+        for view in other.views:
+            self.add_view(view, exists_ok=True)
+
         other.world_is_being_modified = False
 
-        connection = root_connection or Connection6DoF(parent=self_root, child=other_root, _world=self)
+        connection = root_connection or Connection6DoF(
+            parent=self_root, child=other_root, _world=self
+        )
+        for dof in connection.dofs:
+            self.register_degree_of_freedom(dof)
         self.add_connection(connection)
 
+    @modifies_world
     def merge_world_at_pose(self, other: World, pose: cas.TransformationMatrix) -> None:
         """
         Merge another world into the existing one, creates a 6DoF connection between the root of this world and the root
@@ -510,7 +585,6 @@ class World:
         root_connection = Connection6DoF(parent=self.root, child=other.root, _world=self)
         root_connection.origin = pose
         self.merge_world(other, root_connection)
-        self.add_connection(root_connection)
 
     def __str__(self):
         return f"{self.__class__.__name__} with {len(self.bodies)} bodies."

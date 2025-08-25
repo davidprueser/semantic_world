@@ -1,7 +1,11 @@
+import time
+
 import numpy as np
 import pytest
+import rclpy
 
-from semantic_world.connections import PrismaticConnection, RevoluteConnection, Connection6DoF
+from semantic_world.adapters.viz_marker import VizMarkerPublisher
+from semantic_world.connections import PrismaticConnection, RevoluteConnection, Connection6DoF, FixedConnection
 from semantic_world.exceptions import AddingAnExistingViewError, DuplicateViewError, ViewNotFoundError
 from semantic_world.prefixed_name import PrefixedName
 from semantic_world.spatial_types.derivatives import Derivatives
@@ -297,8 +301,12 @@ def test_merge_with_connection(world_setup, pr2_world):
     torso_lift_link = pr2_world.get_body_by_name("torso_lift_link")
     r_shoulder_pan_joint = pr2_world.get_connection(torso_lift_link, pr2_world.get_body_by_name("r_shoulder_pan_link"))
 
-    new_connection = Connection6DoF(parent=l1, child=pr2_world.root, _world=world)
+    pose = np.eye(4)
+    pose[0, 3] = 1.0
 
+    origin = TransformationMatrix(pose)
+
+    new_connection = FixedConnection(parent=world.root, child=pr2_world.root, origin_expression=origin, _world=world)
     world.merge_world(pr2_world, new_connection)
 
     assert base_link in world.bodies
@@ -306,6 +314,8 @@ def test_merge_with_connection(world_setup, pr2_world):
     assert new_connection in world.connections
     assert torso_lift_link._world == world
     assert r_shoulder_pan_joint._world == world
+    assert world.compute_forward_kinematics_np(world.root, base_link)[0, 3] == pytest.approx(1.0, abs=1e-6)
+
 
 
 def test_merge_with_pose(world_setup, pr2_world):
@@ -319,7 +329,7 @@ def test_merge_with_pose(world_setup, pr2_world):
     pose = np.eye(4)
     pose[0, 3] = 1.0  # Translate along x-axis
 
-    world.merge_world_at_pose(pr2_world, pose)
+    world.merge_world_at_pose(pr2_world, TransformationMatrix(pose))
 
     assert base_link in world.bodies
     assert r_gripper_tool_frame in world.bodies
@@ -343,7 +353,7 @@ def test_merge_with_pose_rotation(world_setup, pr2_world):
                      [0., 0., 1., 0.],
                      [0., 0., 0., 1.]])
 
-    world.merge_world_at_pose(pr2_world, pose)
+    world.merge_world_at_pose(pr2_world, TransformationMatrix(pose))
 
     assert base_link in world.bodies
     assert r_gripper_tool_frame in world.bodies
@@ -354,3 +364,22 @@ def test_merge_with_pose_rotation(world_setup, pr2_world):
     assert fk_base[1, 3] == pytest.approx(1.0, abs=1e-6)
     assert fk_base[2, 3] == pytest.approx(0.0, abs=1e-6)
     np.testing.assert_array_almost_equal(rotation_matrix_from_rpy(0, 0, np.pi / 2)[:3, :3], fk_base[:3, :3], decimal=6)
+
+def test_remove_connection(world_setup):
+    world, l1, l2, bf, r1, r2 = world_setup
+    connection = world.get_connection(l1, l2)
+    with world.modify_world():
+        world.remove_connection(connection)
+        world.remove_body(l2)
+    assert connection not in world.connections
+    # dof should still exist because it was a mimic connection.
+    assert connection.dof.name in world.state
+
+    with world.modify_world():
+        world.remove_connection(world.get_connection(r1, r2))
+        new_connection = FixedConnection(r1, r2)
+        world.add_connection(new_connection)
+
+    with pytest.raises(ValueError):
+        # if you remove a connection, the child must be connected some other way or deleted
+        world.remove_connection(world.get_connection(r1, r2))
