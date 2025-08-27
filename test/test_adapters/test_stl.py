@@ -21,15 +21,15 @@ class STLAdapterTestCase(unittest.TestCase):
         world = stl_parser.parse()
         world.validate()
 
-        self.assertEqual(len(world.bodies), 1)
-        self.assertEqual(len(world.bodies[0].collision), 1)
-        self.assertEqual(len(world.bodies[0].visual), 1)
-        self.assertEqual(Mesh, type(world.bodies[0].collision[0]))
+        self.assertEqual(len(world.kinematic_structure_entities), 1)
+        self.assertEqual(len(world.kinematic_structure_entities[0].collision), 1)
+        self.assertEqual(len(world.kinematic_structure_entities[0].visual), 1)
+        self.assertEqual(Mesh, type(world.kinematic_structure_entities[0].collision[0]))
 
     def test_parse_and_merge(self):
         milk_world = STLParser(self.milk_path).parse()
         cup_world = STLParser(self.cup).parse()
 
         milk_world.merge_world(cup_world)
-        self.assertEqual(len(milk_world.bodies), 2)
-        self.assertEqual(len(milk_world.bodies[0].collision), 1)
+        self.assertEqual(len(milk_world.kinematic_structure_entities), 2)
+        self.assertEqual(len(milk_world.kinematic_structure_entities[0].collision), 1)

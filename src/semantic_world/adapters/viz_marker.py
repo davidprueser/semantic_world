@@ -3,14 +3,23 @@ import threading
 import time
 
 import numpy as np
-from builtin_interfaces.msg import Duration
-from geometry_msgs.msg import Vector3, Point, PoseStamped, Quaternion, Pose
+
+from .. import logger
+
+try:
+    from builtin_interfaces.msg import Duration
+    from geometry_msgs.msg import Vector3, Point, Quaternion, Pose
+    from std_msgs.msg import ColorRGBA
+    from visualization_msgs.msg import Marker, MarkerArray
+    from geometry_msgs.msg import Vector3, Point, PoseStamped, Quaternion, Pose
+except ImportError as e:
+    logger.warning(f"Could not import ros messages, viz marker will not be available: {e}")
+
 from scipy.spatial.transform import Rotation
-from std_msgs.msg import ColorRGBA
-from visualization_msgs.msg import Marker, MarkerArray
 
 from ..geometry import Mesh, Box, Sphere, Cylinder, Primitive, TriangleMesh
 from ..world import World
+
 
 class VizMarkerPublisher:
     """
@@ -60,7 +69,7 @@ class VizMarkerPublisher:
         :return: An Array of Visualization Marker
         """
         marker_array = MarkerArray()
-        for body in self.world.bodies:
+        for body in self.world.kinematic_structure_entities:
             for i, collision in enumerate(body.collision):
                 msg = Marker()
                 msg.header.frame_id = self.reference_frame
@@ -115,4 +124,3 @@ class VizMarkerPublisher:
         pose.position = Point(**dict(zip(["x", "y", "z"], transform[:3, 3])))
         pose.orientation = Quaternion(**dict(zip(["x", "y", "z", "w"], Rotation.from_matrix(transform[:3, :3]).as_quat())))
         return pose
-

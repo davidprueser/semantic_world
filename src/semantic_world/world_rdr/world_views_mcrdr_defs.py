@@ -8,7 +8,7 @@ from semantic_world.world import World
 def conditions_90574698325129464513441443063592862114(case) -> bool:
     def has_bodies_named_handle(case: World) -> bool:
         """Get conditions on whether it's possible to conclude a value for World.views  of type Handle."""
-        return any("handle" in b.name.name.lower() for b in case.bodies)
+        return any("handle" in b.name.name.lower() for b in case.kinematic_structure_entities)
 
     return has_bodies_named_handle(case)
 
@@ -16,7 +16,7 @@ def conditions_90574698325129464513441443063592862114(case) -> bool:
 def conclusion_90574698325129464513441443063592862114(case) -> List[Handle]:
     def get_handles(case: World) -> Union[set, list, Handle]:
         """Get possible value(s) for World.views of types list/set of Handle"""
-        return [Handle(b) for b in case.bodies if "handle" in b.name.name.lower()]
+        return [Handle(b) for b in case.kinematic_structure_entities if "handle" in b.name.name.lower()]
 
     return get_handles(case)
 

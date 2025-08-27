@@ -6,11 +6,11 @@ import numpy as np
 from probabilistic_model.probabilistic_circuit.rx.helper import uniform_measure_of_event
 from typing_extensions import List
 
-from semantic_world.geometry import BoundingBoxCollection
-from semantic_world.prefixed_name import PrefixedName
-from semantic_world.spatial_types import Point3
-from semantic_world.variables import SpatialVariables
-from semantic_world.world import View, Body
+from ..geometry import BoundingBoxCollection
+from ..prefixed_name import PrefixedName
+from ..spatial_types import Point3
+from ..variables import SpatialVariables
+from ..world import View, Body
 
 
 @dataclass
@@ -64,6 +64,9 @@ class Door(View):  # Door has a Footprint
 
 @dataclass(unsafe_hash=True)
 class Fridge(View):
+    """
+    A view representing a fridge that has a door and a body.
+    """
     body: Body
     door: Door
 
@@ -132,13 +135,23 @@ class Door(EntryWay):
     handle: Handle
 
     def __post_init__(self):
+        self.name = self.body.name
+
+
+@dataclass(unsafe_hash=True)
+class Fridge(View):
+    body: Body
+    door: Door
+
+    def __post_init__(self):
         if self.name is None:
             self.name = PrefixedName(str(self.body.name), self.__class__.__name__)
 
 
 @dataclass(unsafe_hash=True)
 class DoubleDoor(EntryWay):
-    doors: List[Door] = field(default_factory=list, hash=False)
+    left_door : Door
+    right_door : Door
 
     def __post_init__(self):
         if self.name is None:

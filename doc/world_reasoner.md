@@ -1,3 +1,5 @@
+from os.path import dirname
+
 # World Reasoner
 
 The world reasoner {py:class}`semantic_world.reasoner.WorldReasoner` is a class that uses [Ripple Down Rules](https://github.com/AbdelrhmanBassiouny/ripple_down_rules/tree/main)
@@ -21,13 +23,11 @@ For example lets say the reasoner now has rules that enable it find specific typ
 The way to use the reasoner is like the following example:
 
 ```python
+from os.path import join, dirname
 from semantic_world.reasoner import WorldReasoner
 from semantic_world.adapters.urdf import URDFParser
 
-def create_kitchen_world(kitchen_path: str = 'kitchen-small.urdf'):
-    return URDFParser(kitchen_path)
-
-kitchen_world = create_kitchen_world()
+kitchen_world = URDFParser(join(dirname(__file__), '..', 'resources', 'urdf', 'kitchen-small.urdf')).parse()
 reasoner = WorldReasoner(kitchen_world)
 found_concepts = reasoner.reason()
 
@@ -51,12 +51,13 @@ more attributes of the world.
 For example, let's say you want to improve an existing rule that classifies Drawers, you can do that as follows:
 
 ```python
+from os.path import join, dirname
 from semantic_world.reasoner import WorldReasoner
 from semantic_world.adapters.urdf import URDFParser
 from semantic_world.views.views import Drawer
 
-def create_kitchen_world(kitchen_path: str = 'kitchen-small.urdf'):
-    return URDFParser(kitchen_path)
+def create_kitchen_world():
+    return URDFParser(join(dirname(__file__), '..', 'resources', 'urdf', 'kitchen-small.urdf')).parse()
 
 kitchen_world = create_kitchen_world()
 reasoner = WorldReasoner(kitchen_world)
@@ -142,12 +143,12 @@ test file. Since there is already rules for Drawer, there would already be a tes
 set the `update_existing_views` to `True` like this:
 
 ```python
-    def test_drawer_view(self):
-        self.fit_rules_for_a_view_in_apartment(Drawer, scenario=self.test_drawer_view, update_existing_views=True)
+def test_drawer_view(self):
+    self.fit_rules_for_a_view_in_apartment(Drawer, scenario=self.test_drawer_view, update_existing_views=True)
 ```
 then run the test from the terminal using `pytest` as follows:
 ```bash
-cd semantic_world/test/test_views && pytest -k "test_drawer_view"
+cd semantic_world/test/test_views && pytest -s -k "test_drawer_view"
 ```
 Then answer the prompt with the rule as described before. Now the rules for the Drawer view has been updated, Nice Work!
 

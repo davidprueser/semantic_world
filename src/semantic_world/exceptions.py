@@ -1,10 +1,12 @@
 from __future__ import annotations
-from typing_extensions import List, TYPE_CHECKING
+
+from typing_extensions import Optional, List, Type, TYPE_CHECKING
 
 from .prefixed_name import PrefixedName
 
 if TYPE_CHECKING:
-    from .world_entity import View
+    from .world import World
+    from .world_entity import View, WorldEntity
 
 
 class LogicalError(Exception):
@@ -33,7 +35,25 @@ class DuplicateViewError(UsageError):
         super().__init__(msg)
 
 
+class ParsingError(Exception):
+    """
+    An error that happens during parsing of files.
+    """
+    def __init__(self, file_path: Optional[str] = None, msg: Optional[str] = None):
+        if not msg:
+            if file_path:
+                msg = f'File {file_path} could not be parsed.'
+            else:
+                msg = ""
+        super().__init__(msg)
+
+
 class ViewNotFoundError(UsageError):
     def __init__(self, name: PrefixedName):
         msg = f'View with name {name} not found'
+        super().__init__(msg)
+
+class AlreadyBelongsToAWorldError(UsageError):
+    def __init__(self, world: World, type_trying_to_add: Type[WorldEntity]):
+        msg = f"Cannot add a {type_trying_to_add} that already belongs to another world {world.name}."
         super().__init__(msg)

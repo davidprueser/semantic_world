@@ -13,7 +13,7 @@ import casadi as ca
 import numpy as np
 
 if TYPE_CHECKING:
-    from ..world_entity import Body
+    from ..world_entity import KinematicStructureEntity
 
 builtin_max = builtins.max
 builtin_min = builtins.min
@@ -25,7 +25,7 @@ pi = ca.pi
 
 @dataclass
 class ReferenceFrameMixin:
-    reference_frame: Optional[Body]
+    reference_frame: Optional[KinematicStructureEntity]
 
 
 class StackedCompiledFunction:

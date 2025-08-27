@@ -35,27 +35,27 @@ class MultiParserTestCase(unittest.TestCase):
     def test_table_parsing(self):
         for world, body_num in zip([self.table_urdf_parser.parse(), self.table_xml_parser.parse()], [6, 7]):
             world.validate()
-            self.assertTrue(len(world.bodies) == body_num)
+            self.assertTrue(len(world.kinematic_structure_entities) == body_num)
 
-            origin_left_front_leg_joint = world.get_connection(world.root, world.bodies[1])
+            origin_left_front_leg_joint = world.get_connection(world.root, world.kinematic_structure_entities[1])
             self.assertIsInstance(origin_left_front_leg_joint, FixedConnection)
 
     def test_kitchen_parsing(self):
         for world in [self.kitchen_urdf_parser.parse(), self.kitchen_xml_parser.parse()]:
             world.validate()
-            self.assertTrue(len(world.bodies) > 0)
+            self.assertTrue(len(world.kinematic_structure_entities) > 0)
             self.assertTrue(len(world.connections) > 0)
 
     def test_apartment_parsing(self):
         for world in [self.apartment_urdf_parser.parse(), self.apartment_xml_parser.parse()]:
             world.validate()
-            self.assertTrue(len(world.bodies) > 0)
+            self.assertTrue(len(world.kinematic_structure_entities) > 0)
             self.assertTrue(len(world.connections) > 0)
 
     def test_pr2_parsing(self):
         for world, root_name in zip([self.pr2_urdf_parser.parse(), self.pr2_xml_parser.parse()], ['base_footprint', 'world']):
             world.validate()
-            self.assertTrue(len(world.bodies) > 0)
+            self.assertTrue(len(world.kinematic_structure_entities) > 0)
             self.assertTrue(len(world.connections) > 0)
             self.assertTrue(world.root.name.name == root_name)
 

@@ -50,7 +50,7 @@ class ORMTest(unittest.TestCase):
         self.session.commit()
 
         bodies_from_db = self.session.scalars(select(BodyDAO)).all()
-        self.assertEqual(len(bodies_from_db), len(self.table_world.bodies))
+        self.assertEqual(len(bodies_from_db), len(self.table_world.kinematic_structure_entities))
 
         connections_from_db = self.session.scalars(select(ConnectionDAO)).all()
         self.assertEqual(len(connections_from_db), len(self.table_world.connections))

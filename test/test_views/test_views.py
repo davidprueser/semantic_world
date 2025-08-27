@@ -7,6 +7,7 @@ import pytest
 from numpy.ma.testutils import assert_equal
 
 from semantic_world.reasoner import WorldReasoner
+from semantic_world.world_entity import KinematicStructureEntity
 
 try:
     from ripple_down_rules.user_interface.gui import RDRCaseViewer
@@ -19,7 +20,7 @@ except ImportError as e:
 from typing_extensions import Type, Optional, Callable
 
 from semantic_world.adapters.urdf import URDFParser
-from semantic_world.views import *
+from semantic_world.views.views import *
 
 try:
     from semantic_world.world_rdr import world_rdr
@@ -32,16 +33,16 @@ class TestView(View):
     """
     A Generic View for multiple bodies.
     """
-    _private_body: Body = field(default=Body)
-    body_list: List[Body] = field(default_factory=list, hash=False)
+    _private_entity: KinematicStructureEntity = field(default=None)
+    entity_list: List[KinematicStructureEntity] = field(default_factory=list, hash=False)
     views: List[View] = field(default_factory=list, hash=False)
-    root_body_1: Body = field(default=Body)
-    root_body_2: Body = field(default=Body)
-    tip_body_1: Body = field(default=Body)
-    tip_body_2: Body = field(default=Body)
+    root_entity_1: KinematicStructureEntity = field(default=None)
+    root_entity_2: KinematicStructureEntity = field(default=None)
+    tip_entity_1: KinematicStructureEntity = field(default=None)
+    tip_entity_2: KinematicStructureEntity = field(default=None)
 
-    def add_body(self, body: Body):
-        self.body_list.append(body)
+    def add_entity(self, body: KinematicStructureEntity):
+        self.entity_list.append(body)
         body._views.add(self)
 
     def add_view(self, view: View):
@@ -49,25 +50,25 @@ class TestView(View):
         view._views.add(self)
 
     @property
-    def chain(self) -> list[Body]:
+    def chain(self) -> list[KinematicStructureEntity]:
         """
         Returns itself as a kinematic chain.
         """
-        return self._world.compute_chain_of_bodies(self.root_body_1, self.tip_body_1)
+        return self._world.compute_chain_of_kinematic_structure_entities(self.root_entity_1, self.tip_entity_1)
 
     @property
-    def _private_chain(self) -> list[Body]:
+    def _private_chain(self) -> list[KinematicStructureEntity]:
         """
         Returns itself as a kinematic chain.
         """
-        return self._world.compute_chain_of_bodies(self.root_body_2, self.tip_body_2)
+        return self._world.compute_chain_of_kinematic_structure_entities(self.root_entity_2, self.tip_entity_2)
 
     def __hash__(self):
         """
         Custom hash function to ensure that the view is hashable.
         """
-        return hash((self._private_body, tuple(self.body_list), tuple(self.views),
-                     self.root_body_1, self.root_body_2, self.tip_body_1, self.tip_body_2))
+        return hash((self._private_entity, tuple(self.entity_list), tuple(self.views),
+                     self.root_entity_1, self.root_entity_2, self.tip_entity_1, self.tip_entity_2))
 
 
 class ViewTestCase(unittest.TestCase):
@@ -110,34 +111,34 @@ class ViewTestCase(unittest.TestCase):
         world_view = TestView(_world=self.kitchen_world)
 
         # Test bodies added to a private dataclass field are not aggregated
-        world_view._private_body = self.kitchen_world.bodies[0]
+        world_view._private_entity = self.kitchen_world.kinematic_structure_entities[0]
 
         # Test aggregation of bodies added in custom properties
-        world_view.root_body_1 = self.kitchen_world.bodies[1]
-        world_view.tip_body_1 = self.kitchen_world.bodies[4]
+        world_view.root_entity_1 = self.kitchen_world.kinematic_structure_entities[1]
+        world_view.tip_entity_1 = self.kitchen_world.kinematic_structure_entities[4]
 
         # Test aggregation of normal dataclass field
-        body_subset = self.kitchen_world.bodies[5:10]
-        [world_view.add_body(body) for body in body_subset]
+        body_subset = self.kitchen_world.kinematic_structure_entities[5:10]
+        [world_view.add_entity(body) for body in body_subset]
 
         # Test aggregation of bodies in a new as well as a nested view
         view1 = TestView()
-        view1_subset = self.kitchen_world.bodies[10:18]
-        [view1.add_body(body) for body in view1_subset]
+        view1_subset = self.kitchen_world.kinematic_structure_entities[10:18]
+        [view1.add_entity(body) for body in view1_subset]
 
         view2 = TestView()
-        view2_subset = self.kitchen_world.bodies[20:]
-        [view2.add_body(body) for body in view2_subset]
+        view2_subset = self.kitchen_world.kinematic_structure_entities[20:]
+        [view2.add_entity(body) for body in view2_subset]
 
         view1.add_view(view2)
         world_view.add_view(view1)
 
         # Test that bodies added in a custom private property are not aggregated
-        world_view.root_body_2 = self.kitchen_world.bodies[18]
-        world_view.tip_body_2 = self.kitchen_world.bodies[20]
+        world_view.root_entity_2 = self.kitchen_world.kinematic_structure_entities[18]
+        world_view.tip_entity_2 = self.kitchen_world.kinematic_structure_entities[20]
 
         # The aggregation should not include the private dataclass field body or the body added exclusively in the private property
-        assert_equal(world_view.bodies, set(self.kitchen_world.bodies) - {self.kitchen_world.bodies[0], self.kitchen_world.bodies[19]})
+        assert_equal(world_view.kinematic_structure_entities, set(self.kitchen_world.kinematic_structure_entities) - {self.kitchen_world.kinematic_structure_entities[0], self.kitchen_world.kinematic_structure_entities[19]})
 
     def test_handle_view(self):
         self.fit_rules_for_a_view_in_apartment(Handle, scenario=self.test_handle_view)

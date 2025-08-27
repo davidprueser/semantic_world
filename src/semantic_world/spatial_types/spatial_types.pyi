@@ -10,7 +10,7 @@ import casadi as ca
 from scipy import sparse as sp
 
 if TYPE_CHECKING:
-    from ..world_entity import Body
+    from ..world_entity import KinematicStructureEntity
 
 all_expressions = Union[Symbol_, Symbol, Expression, Point3, Vector3, RotationMatrix, TransformationMatrix, Quaternion]
 all_expressions_float = Union[Symbol, Expression, Point3, Vector3, RotationMatrix, TransformationMatrix, float, Quaternion]
@@ -23,7 +23,7 @@ pi: float
 def _operation_type_error(arg1: object, operation: str, arg2: object) -> TypeError: ...
 
 class ReferenceFrameMixin:
-    reference_frame: Optional[Body]
+    reference_frame: Optional[KinematicStructureEntity]
 
 
 class StackedCompiledFunction:
@@ -244,14 +244,14 @@ class Point3(Symbol_, ReferenceFrameMixin):
     def z(self, value: symbol_expr_float): ...
 
     def __init__(self, x: symbol_expr_float = 0, y: symbol_expr_float = 0, z: symbol_expr_float = 0,
-                 reference_frame: Optional[Body] = None): ...
+                 reference_frame: Optional[KinematicStructureEntity] = None): ...
 
     @classmethod
     def from_iterable(cls, data: Optional[Union[Expression, Point3, Vector3,
                                             ca.SX,
                                             np.ndarray,
                                             Iterable[symbol_expr_float]]] = None,
-                 reference_frame: Optional[Body] = None) -> Point3: ...
+                 reference_frame: Optional[KinematicStructureEntity] = None) -> Point3: ...
 
     def norm(self) -> Expression: ...
 
@@ -307,7 +307,7 @@ class Point3(Symbol_, ReferenceFrameMixin):
 
 
 class Vector3(Symbol_, ReferenceFrameMixin):
-    vis_frame: Optional[Body]
+    vis_frame: Optional[KinematicStructureEntity]
 
     @property
     def x(self) -> Expression: ...
@@ -323,25 +323,25 @@ class Vector3(Symbol_, ReferenceFrameMixin):
     def z(self, value: symbol_expr_float): ...
 
     def __init__(self, x: symbol_expr_float = 0, y: symbol_expr_float = 0, z: symbol_expr_float = 0,
-                 reference_frame: Optional[Body] = None): ...
+                 reference_frame: Optional[KinematicStructureEntity] = None): ...
 
     @classmethod
     def from_iterable(cls, data: Optional[Union[Expression, Point3, Vector3,
                                             ca.SX,
                                             np.ndarray,
                                             Iterable[symbol_expr_float]]] = None,
-                 reference_frame: Optional[Body] = None) -> Vector3: ...
+                 reference_frame: Optional[KinematicStructureEntity] = None) -> Vector3: ...
 
     @classmethod
-    def X(cls, reference_frame: Optional[Body] = None) -> Vector3: ...
+    def X(cls, reference_frame: Optional[KinematicStructureEntity] = None) -> Vector3: ...
     @classmethod
-    def Y(cls, reference_frame: Optional[Body] = None) -> Vector3: ...
+    def Y(cls, reference_frame: Optional[KinematicStructureEntity] = None) -> Vector3: ...
     @classmethod
-    def Z(cls, reference_frame: Optional[Body] = None) -> Vector3: ...
+    def Z(cls, reference_frame: Optional[KinematicStructureEntity] = None) -> Vector3: ...
 
     @classmethod
     def unit_vector(cls, x: symbol_expr_float = 0, y: symbol_expr_float = 0, z: symbol_expr_float = 0,
-                    reference_frame: Optional[Body] = None) -> Vector3: ...
+                    reference_frame: Optional[KinematicStructureEntity] = None) -> Vector3: ...
 
     def norm(self) -> Expression: ...
 
@@ -420,7 +420,7 @@ BinaryFalse: Expression
 
 
 class TransformationMatrix(Symbol_, ReferenceFrameMixin):
-    child_frame: Optional[Body]
+    child_frame: Optional[KinematicStructureEntity]
 
     def __init__(self, data: Optional[Union[TransformationMatrix,
                                             RotationMatrix,
@@ -428,8 +428,8 @@ class TransformationMatrix(Symbol_, ReferenceFrameMixin):
                                             np.ndarray,
                                             Expression,
                                             Iterable[Iterable[symbol_expr_float]]]] = None,
-                 reference_frame: Optional[Body] = None,
-                 child_frame: Optional[Body] = None,
+                 reference_frame: Optional[KinematicStructureEntity] = None,
+                 child_frame: Optional[KinematicStructureEntity] = None,
                  sanity_check: bool = True): ...
 
     @property
@@ -476,27 +476,27 @@ class TransformationMatrix(Symbol_, ReferenceFrameMixin):
                      roll: Optional[symbol_expr_float] = 0,
                      pitch: Optional[symbol_expr_float] = 0,
                      yaw: Optional[symbol_expr_float] = 0,
-                     reference_frame: Optional[Body] = None,
-                     child_frame: Optional[Body] = None) -> TransformationMatrix: ...
+                     reference_frame: Optional[KinematicStructureEntity] = None,
+                     child_frame: Optional[KinematicStructureEntity] = None) -> TransformationMatrix: ...
     @classmethod
     def from_xyz_quat(cls,
                       pos_x: symbol_expr_float = 0, pos_y: symbol_expr_float = 0, pos_z: symbol_expr_float =00,
                       quat_w: symbol_expr_float = 0, quat_x: symbol_expr_float = 0,
                       quat_y: symbol_expr_float = 0, quat_z: symbol_expr_float = 1,
-                      reference_frame: Optional[Body] = None, child_frame: Optional[Body] = None) \
+                      reference_frame: Optional[KinematicStructureEntity] = None, child_frame: Optional[KinematicStructureEntity] = None) \
             -> TransformationMatrix: ...
     @classmethod
     def from_point_rotation_matrix(cls,
                                    point: Optional[Point3] = None,
                                    rotation_matrix: Optional[RotationMatrix] = None,
-                                   reference_frame: Optional[Body] = None,
-                                   child_frame: Optional[Body] = None) -> TransformationMatrix: ...
+                                   reference_frame: Optional[KinematicStructureEntity] = None,
+                                   child_frame: Optional[KinematicStructureEntity] = None) -> TransformationMatrix: ...
 
     def inverse(self) -> TransformationMatrix: ...
 
 
 class RotationMatrix(Symbol_, ReferenceFrameMixin):
-    child_frame: Optional[Body]
+    child_frame: Optional[KinematicStructureEntity]
 
     def __init__(self, data: Optional[Union[TransformationMatrix,
                                             RotationMatrix,
@@ -505,37 +505,37 @@ class RotationMatrix(Symbol_, ReferenceFrameMixin):
                                             ca.SX,
                                             np.ndarray,
                                             Iterable[Iterable[symbol_expr_float]]]] = None,
-                 reference_frame: Optional[Body] = None,
-                 child_frame: Optional[Body] = None,
+                 reference_frame: Optional[KinematicStructureEntity] = None,
+                 child_frame: Optional[KinematicStructureEntity] = None,
                  sanity_check: bool = True): ...
     @classmethod
     def __quaternion_to_rotation_matrix(cls, q: Quaternion) -> RotationMatrix: ...
 
     @classmethod
-    def from_axis_angle(cls, axis: Vector3, angle: symbol_expr_float, reference_frame: Optional[Body] = None) \
+    def from_axis_angle(cls, axis: Vector3, angle: symbol_expr_float, reference_frame: Optional[KinematicStructureEntity] = None) \
             -> RotationMatrix: ...
     @classmethod
     def from_quaternion(cls, q: Quaternion) -> RotationMatrix: ...
     @classmethod
     @overload
-    def from_vectors(cls, x: Vector3, y: Vector3, reference_frame: Optional[Body] = None) -> RotationMatrix: ...
+    def from_vectors(cls, x: Vector3, y: Vector3, reference_frame: Optional[KinematicStructureEntity] = None) -> RotationMatrix: ...
     @classmethod
     @overload
-    def from_vectors(cls, x: Vector3, z: Vector3, reference_frame: Optional[Body] = None) -> RotationMatrix: ...
+    def from_vectors(cls, x: Vector3, z: Vector3, reference_frame: Optional[KinematicStructureEntity] = None) -> RotationMatrix: ...
     @classmethod
     @overload
-    def from_vectors(cls, y: Vector3, z: Vector3, reference_frame: Optional[Body] = None) -> RotationMatrix: ...
+    def from_vectors(cls, y: Vector3, z: Vector3, reference_frame: Optional[KinematicStructureEntity] = None) -> RotationMatrix: ...
     @classmethod
     @overload
     def from_vectors(cls, x: Vector3, y: Vector3, z: Vector3,
-                     reference_frame: Optional[Body] = None) -> RotationMatrix: ...
+                     reference_frame: Optional[KinematicStructureEntity] = None) -> RotationMatrix: ...
 
     @classmethod
     def from_rpy(cls,
                  roll: Optional[symbol_expr_float] = None,
                  pitch: Optional[symbol_expr_float] = None,
                  yaw: Optional[symbol_expr_float] = None,
-                 reference_frame: Optional[Body] = None) -> RotationMatrix: ...
+                 reference_frame: Optional[KinematicStructureEntity] = None) -> RotationMatrix: ...
 
     def x_vector(self) -> Vector3: ...
     def y_vector(self) -> Vector3: ...
@@ -586,7 +586,7 @@ class Quaternion(Symbol_, ReferenceFrameMixin):
 
     def __init__(self, x: symbol_expr_float = 0.0, y: symbol_expr_float = 0.0,
                  z: symbol_expr_float = 0.0, w: symbol_expr_float = 1.0,
-                 reference_frame: Optional[Body] = None): ...
+                 reference_frame: Optional[KinematicStructureEntity] = None): ...
 
     @classmethod
     def from_iterable(cls, data: Optional[Union[Expression,
@@ -596,14 +596,14 @@ class Quaternion(Symbol_, ReferenceFrameMixin):
                                                   symbol_expr_float,
                                                   symbol_expr_float,
                                                   symbol_expr_float]]] = None,
-                 reference_frame: Optional[Body] = None) -> Quaternion: ...
+                 reference_frame: Optional[KinematicStructureEntity] = None) -> Quaternion: ...
 
     @classmethod
-    def from_axis_angle(cls, axis: Vector3, angle: symbol_expr_float, reference_frame: Optional[Body] = None) \
+    def from_axis_angle(cls, axis: Vector3, angle: symbol_expr_float, reference_frame: Optional[KinematicStructureEntity] = None) \
             -> Quaternion: ...
     @classmethod
     def from_rpy(cls, roll: symbol_expr_float, pitch: symbol_expr_float, yaw: symbol_expr_float,
-                 reference_frame: Optional[Body] = None) -> Quaternion: ...
+                 reference_frame: Optional[KinematicStructureEntity] = None) -> Quaternion: ...
     @classmethod
     def from_rotation_matrix(cls, r: Union[RotationMatrix, TransformationMatrix]) -> Quaternion: ...
 

@@ -3,7 +3,7 @@ import unittest
 from semantic_world.geometry import Scale
 from semantic_world.prefixed_name import PrefixedName
 from semantic_world.spatial_types.spatial_types import TransformationMatrix
-from semantic_world.views import Handle, Door, Container, Drawer, Dresser, Wall
+from semantic_world.views.views import Handle, Door, Container, Drawer, Dresser, Wall
 from semantic_world.views.factories import (
     HandleFactory,
     Direction,
@@ -61,7 +61,7 @@ class TestFactories(unittest.TestCase):
         self.assertEqual(len(door_views), 2)
 
         doors: list[Door] = door_views
-        self.assertEqual(set(world.root.child_bodies), {doors[0].body, doors[1].body})
+        self.assertEqual(set(world.root.child_kinematic_structure_entities), {doors[0].body, doors[1].body})
         self.assertIsInstance(doors[0].handle, Handle)
         self.assertIsInstance(doors[1].handle, Handle)
         self.assertNotEqual(doors[0].handle, doors[1].handle)
@@ -92,20 +92,20 @@ class TestFactories(unittest.TestCase):
     def test_dresser_factory(self):
         drawer_factory = DrawerFactory(
             name=PrefixedName("drawer"),
-            container_factory=ContainerFactory(name=PrefixedName("container")),
-            handle_factory=HandleFactory(name=PrefixedName("handle")),
+            container_factory=ContainerFactory(name=PrefixedName("drawer_container")),
+            handle_factory=HandleFactory(name=PrefixedName("drawer_handle")),
         )
         drawer_transform = TransformationMatrix()
 
         door_factory = DoorFactory(
             name=PrefixedName("door"),
-            handle_factory=HandleFactory(name=PrefixedName("handle")),
+            handle_factory=HandleFactory(name=PrefixedName("door_handle")),
             handle_direction=Direction.Y,
         )
 
         door_transform = TransformationMatrix()
 
-        container_factory = ContainerFactory(name=PrefixedName("container"))
+        container_factory = ContainerFactory(name=PrefixedName("dresser_container"))
 
         dresser_factory = DresserFactory(
             name=PrefixedName("dresser"),

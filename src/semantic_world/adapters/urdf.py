@@ -1,16 +1,20 @@
 import os
 from dataclasses import dataclass
-from typing import Optional, Tuple, Dict, Union, List
-from ..spatial_types import spatial_types as cas
+from typing import Optional, Tuple, Union, List
+
+from typing_extensions import Dict
 from urdf_parser_py import urdf
 
+from ..exceptions import ParsingError
 from ..connections import RevoluteConnection, PrismaticConnection, FixedConnection
+from ..degree_of_freedom import DegreeOfFreedom
+from ..geometry import Box, Sphere, Cylinder, Mesh, Scale, Shape, Color
 from ..prefixed_name import PrefixedName
+from ..spatial_types import spatial_types as cas
 from ..spatial_types.derivatives import Derivatives, DerivativeMap
 from ..spatial_types.spatial_types import TransformationMatrix, Vector3
 from ..utils import suppress_stdout_stderr, hacky_urdf_parser_fix
 from ..world import World, Body, Connection
-from ..geometry import Box, Sphere, Cylinder, Mesh, Scale, Shape, Color
 
 connection_type_map = {  # 'unknown': JointType.UNKNOWN,
     'revolute': RevoluteConnection,
@@ -76,16 +80,22 @@ class URDFParser:
     The prefix for every name used in this world.
     """
 
+    package_resolver: Optional[Dict[str, str]] = None
+    """
+    The package resolver to use for resolving package paths in the URDF file. If ROS is installed, ROS will be used
+     to resolve the paths, otherwise the package_resolver must be provided if the URDF file contains package paths.
+     The key is the package name and the value is the path to the package. You can also set the environment variable
+     `ROS_PACKAGE_PATH` to a colon-separated list of package paths, which will be used as the package resolver.
+    """
+
     def __post_init__(self):
         if self.prefix is None:
             self.prefix = os.path.basename(self.file_path).split('.')[0]
+        if self.package_resolver is None:
+            package_paths = os.environ.get('ROS_PACKAGE_PATH', '').split(':')
+            self.package_resolver = {os.path.basename(path): path for path in package_paths if os.path.exists(path)}
 
     def parse(self) -> World:
-        # cache_dir = os.path.join(os.getcwd(), '..', '..', '../resources', 'cache')
-        # file_name = os.path.basename(self.file_path)
-        # new_file_path = os.path.join(cache_dir, file_name)
-        # generate_from_description_file(self.file_path, new_file_path)
-
         with open(self.file_path, 'r') as file:
             # Since parsing URDF causes a lot of warning messages which can't be deactivated, we suppress them
             with suppress_stdout_stderr():
@@ -95,7 +105,7 @@ class URDFParser:
         root = [link for link in links if link.name.name == self.parsed.get_root()][0]
         world = World()
         world.name = self.prefix
-        world.add_body(root)
+        world.add_kinematic_structure_entity(root)
 
         with world.modify_world():
             joints = []
@@ -106,7 +116,7 @@ class URDFParser:
                 joints.append(parsed_joint)
 
             [world.add_connection(joint) for joint in joints]
-            [world.add_body(link) for link in links]
+            [world.add_kinematic_structure_entity(link) for link in links]
 
         return world
 
@@ -152,8 +162,12 @@ class URDFParser:
         try:
             dof = world.get_degree_of_freedom_by_name(dof_name)
         except KeyError as e:
-            dof = world.create_degree_of_freedom(name=PrefixedName(joint.name),
-                                                 lower_limits=lower_limits, upper_limits=upper_limits)
+            dof = DegreeOfFreedom(
+                name=PrefixedName(joint.name),
+                lower_limits=lower_limits,
+                upper_limits=upper_limits,
+            )
+            world.add_degree_of_freedom(dof)
 
         result = connection_type(parent=parent, child=child, origin_expression=parent_T_child,
                                  multiplier=multiplier, offset=offset,
@@ -224,23 +238,31 @@ class URDFParser:
                                 scale=Scale(*(geom.geometry.scale or (1, 1, 1)))))
         return res
 
-    @staticmethod
-    def parse_file_path(file_path: str) -> str:
+    def parse_file_path(self, file_path: str) -> str:
         """
         Parses a file path which contains a ros package to a path in the local file system.
+
         :param file_path: The path to the URDF file.
         :return: The parsed and processed file path.
         """
         if "package://" in file_path:
-            try:
-                from ament_index_python.packages import get_package_share_directory
-            except ImportError:
-                raise ImportError("No ROS install found while the URDF file contains references to ROS packages. ")
             # Splits the file path at '//' to get the package  and the rest of the path
             package_split = file_path.split('//')
             # Splits the path after the // to get the package name and the rest of the path
             package_name = package_split[1].split('/')[0]
-            package_path = get_package_share_directory(package_name)
+            try:
+                from ament_index_python.packages import get_package_share_directory
+                package_path = get_package_share_directory(package_name)
+            except ImportError:
+                if self.package_resolver:
+                    if package_name in self.package_resolver:
+                        package_path = self.package_resolver[package_name]
+                    else:
+                        raise ParsingError(msg=f"Package '{package_name}' not found in package resolver and "
+                                           f"ROS is not installed.")
+                else:
+                    raise ParsingError(msg="No ROS install found while the URDF file contains references to "
+                                           "ROS packages.")
             file_path = file_path.replace("package://" + package_name, package_path)
         if 'file://' in file_path:
             file_path = file_path.replace("file://", './')

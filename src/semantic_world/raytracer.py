@@ -6,8 +6,8 @@ import numpy as np
 import trimesh
 from trimesh import Scene
 
-from .world_entity import Body
 from .types import NpMatrix4x4
+from .world_entity import Body
 
 if TYPE_CHECKING:
     from .world import World
@@ -73,7 +73,11 @@ class RayTracer:
         # Bodies are added to the scene with their name as the node name plus a suffix for collision geometries.
         # We check if a body is not in the complete list of all node names in the scene graph.
         # If the body is not present, we add it to the scene.
-        bodies_to_add = [body for body in self.world.bodies if body.name.name not in "\t".join(self.scene.graph.nodes)]
+        bodies_to_add = [
+            body
+            for body in self.world.bodies
+            if body.name.name not in "\t".join(self.scene.graph.nodes)
+        ]
         for body in bodies_to_add:
             for i, collision in enumerate(body.collision):
                 self.scene.add_geometry(collision.mesh,

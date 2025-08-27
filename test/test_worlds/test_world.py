@@ -1,10 +1,6 @@
-import time
-
 import numpy as np
 import pytest
-import rclpy
 
-from semantic_world.adapters.viz_marker import VizMarkerPublisher
 from semantic_world.connections import PrismaticConnection, RevoluteConnection, Connection6DoF, FixedConnection
 from semantic_world.exceptions import AddingAnExistingViewError, DuplicateViewError, ViewNotFoundError
 from semantic_world.prefixed_name import PrefixedName
@@ -34,21 +30,21 @@ def test_set_state(world_setup):
     assert c1.position == 2.0
 
     transform[0, 3] += c1.position
-    assert np.allclose(l2.global_pose, transform)
+    assert np.allclose(l2.global_pose.to_np(), transform)
 
 
 def test_construction(world_setup):
     world, l1, l2, bf, r1, r2 = world_setup
     world.validate()
     assert len(world.connections) == 5
-    assert len(world.bodies) == 6
+    assert len(world.kinematic_structure_entities) == 6
     assert world.state.positions[0] == 0
     assert world.get_connection(l1, l2).dof.name == world.get_connection(r1, r2).dof.name
 
 
 def test_chain_of_bodies(world_setup):
     world, _, l2, _, _, _ = world_setup
-    result = world.compute_chain_of_bodies(root=world.root, tip=l2)
+    result = world.compute_chain_of_kinematic_structure_entities(root=world.root, tip=l2)
     result = [x.name for x in result]
     assert result == [PrefixedName(name='root', prefix='world'), PrefixedName(name='bf', prefix=None),
                       PrefixedName(name='l1', prefix=None), PrefixedName(name='l2', prefix=None)]
@@ -64,7 +60,7 @@ def test_chain_of_connections(world_setup):
 
 def test_split_chain_of_bodies(world_setup):
     world, _, l2, _, _, r2 = world_setup
-    result = world.compute_split_chain_of_bodies(root=r2, tip=l2)
+    result = world.compute_split_chain_of_kinematic_structure_entities(root=r2, tip=l2)
     result = tuple([x.name for x in y] for y in result)
     assert result == ([PrefixedName(name='r2', prefix=None), PrefixedName(name='r1', prefix=None)],
                       [PrefixedName(name='bf', prefix=None)],
@@ -73,21 +69,21 @@ def test_split_chain_of_bodies(world_setup):
 
 def test_split_chain_of_bodies_adjacent1(world_setup):
     world, _, _, _, r1, r2 = world_setup
-    result = world.compute_split_chain_of_bodies(root=r2, tip=r1)
+    result = world.compute_split_chain_of_kinematic_structure_entities(root=r2, tip=r1)
     result = tuple([x.name for x in y] for y in result)
     assert result == ([PrefixedName(name='r2', prefix=None)], [PrefixedName(name='r1', prefix=None)], [])
 
 
 def test_split_chain_of_bodies_adjacent2(world_setup):
     world, _, _, _, r1, r2 = world_setup
-    result = world.compute_split_chain_of_bodies(root=r1, tip=r2)
+    result = world.compute_split_chain_of_kinematic_structure_entities(root=r1, tip=r2)
     result = tuple([x.name for x in y] for y in result)
     assert result == ([], [PrefixedName(name='r1', prefix=None)], [PrefixedName(name='r2', prefix=None)])
 
 
 def test_split_chain_of_bodies_identical(world_setup):
     world, _, _, _, r1, _ = world_setup
-    result = world.compute_split_chain_of_bodies(root=r1, tip=r1)
+    result = world.compute_split_chain_of_kinematic_structure_entities(root=r1, tip=r1)
     result = tuple([x.name for x in y] for y in result)
     assert result == ([], [PrefixedName(name='r1', prefix=None)], [])
 
@@ -277,17 +273,17 @@ def test_duplicate_view(world_setup):
 def test_merge_world(world_setup, pr2_world):
     world, l1, l2, bf, r1, r2 = world_setup
 
-    base_link = pr2_world.get_body_by_name("base_link")
-    r_gripper_tool_frame = pr2_world.get_body_by_name('r_gripper_tool_frame')
-    torso_lift_link = pr2_world.get_body_by_name("torso_lift_link")
-    r_shoulder_pan_joint = pr2_world.get_connection(torso_lift_link, pr2_world.get_body_by_name("r_shoulder_pan_link"))
+    base_link = pr2_world.get_kinematic_structure_entity_by_name(PrefixedName("base_link"))
+    r_gripper_tool_frame = pr2_world.get_kinematic_structure_entity_by_name(PrefixedName('r_gripper_tool_frame'))
+    torso_lift_link = pr2_world.get_kinematic_structure_entity_by_name(PrefixedName("torso_lift_link"))
+    r_shoulder_pan_joint = pr2_world.get_connection(torso_lift_link, pr2_world.get_kinematic_structure_entity_by_name(PrefixedName("r_shoulder_pan_link")))
 
-    l_shoulder_pan_joint = pr2_world.get_connection(torso_lift_link, pr2_world.get_body_by_name("l_shoulder_pan_link"))
+    l_shoulder_pan_joint = pr2_world.get_connection(torso_lift_link, pr2_world.get_kinematic_structure_entity_by_name(PrefixedName("l_shoulder_pan_link")))
 
     world.merge_world(pr2_world)
 
-    assert base_link in world.bodies
-    assert r_gripper_tool_frame in world.bodies
+    assert base_link in world.kinematic_structure_entities
+    assert r_gripper_tool_frame in world.kinematic_structure_entities
     assert l_shoulder_pan_joint in world.connections
     assert torso_lift_link._world == world
     assert r_shoulder_pan_joint._world == world
@@ -296,10 +292,10 @@ def test_merge_world(world_setup, pr2_world):
 def test_merge_with_connection(world_setup, pr2_world):
     world, l1, l2, bf, r1, r2 = world_setup
 
-    base_link = pr2_world.get_body_by_name("base_link")
-    r_gripper_tool_frame = pr2_world.get_body_by_name('r_gripper_tool_frame')
-    torso_lift_link = pr2_world.get_body_by_name("torso_lift_link")
-    r_shoulder_pan_joint = pr2_world.get_connection(torso_lift_link, pr2_world.get_body_by_name("r_shoulder_pan_link"))
+    base_link = pr2_world.get_kinematic_structure_entity_by_name(PrefixedName("base_link"))
+    r_gripper_tool_frame = pr2_world.get_kinematic_structure_entity_by_name(PrefixedName('r_gripper_tool_frame'))
+    torso_lift_link = pr2_world.get_kinematic_structure_entity_by_name(PrefixedName("torso_lift_link"))
+    r_shoulder_pan_joint = pr2_world.get_connection(torso_lift_link, pr2_world.get_kinematic_structure_entity_by_name(PrefixedName("r_shoulder_pan_link")))
 
     pose = np.eye(4)
     pose[0, 3] = 1.0
@@ -309,8 +305,8 @@ def test_merge_with_connection(world_setup, pr2_world):
     new_connection = FixedConnection(parent=world.root, child=pr2_world.root, origin_expression=origin, _world=world)
     world.merge_world(pr2_world, new_connection)
 
-    assert base_link in world.bodies
-    assert r_gripper_tool_frame in world.bodies
+    assert base_link in world.kinematic_structure_entities
+    assert r_gripper_tool_frame in world.kinematic_structure_entities
     assert new_connection in world.connections
     assert torso_lift_link._world == world
     assert r_shoulder_pan_joint._world == world
@@ -321,18 +317,18 @@ def test_merge_with_connection(world_setup, pr2_world):
 def test_merge_with_pose(world_setup, pr2_world):
     world, l1, l2, bf, r1, r2 = world_setup
 
-    base_link = pr2_world.get_body_by_name("base_link")
-    r_gripper_tool_frame = pr2_world.get_body_by_name('r_gripper_tool_frame')
-    torso_lift_link = pr2_world.get_body_by_name("torso_lift_link")
-    r_shoulder_pan_joint = pr2_world.get_connection(torso_lift_link, pr2_world.get_body_by_name("r_shoulder_pan_link"))
+    base_link = pr2_world.get_kinematic_structure_entity_by_name(PrefixedName("base_link"))
+    r_gripper_tool_frame = pr2_world.get_kinematic_structure_entity_by_name(PrefixedName('r_gripper_tool_frame'))
+    torso_lift_link = pr2_world.get_kinematic_structure_entity_by_name(PrefixedName("torso_lift_link"))
+    r_shoulder_pan_joint = pr2_world.get_connection(torso_lift_link, pr2_world.get_kinematic_structure_entity_by_name(PrefixedName("r_shoulder_pan_link")))
 
     pose = np.eye(4)
     pose[0, 3] = 1.0  # Translate along x-axis
 
     world.merge_world_at_pose(pr2_world, TransformationMatrix(pose))
 
-    assert base_link in world.bodies
-    assert r_gripper_tool_frame in world.bodies
+    assert base_link in world.kinematic_structure_entities
+    assert r_gripper_tool_frame in world.kinematic_structure_entities
     assert torso_lift_link._world == world
     assert r_shoulder_pan_joint._world == world
     assert world.compute_forward_kinematics_np(world.root, base_link)[0, 3] == pytest.approx(1.0, abs=1e-6)
@@ -341,11 +337,11 @@ def test_merge_with_pose(world_setup, pr2_world):
 def test_merge_with_pose_rotation(world_setup, pr2_world):
     world, l1, l2, bf, r1, r2 = world_setup
 
-    base_link = pr2_world.get_body_by_name("base_link")
-    r_gripper_tool_frame = pr2_world.get_body_by_name('r_gripper_tool_frame')
-    torso_lift_link = pr2_world.get_body_by_name("torso_lift_link")
-    r_shoulder_pan_joint = pr2_world.get_connection(torso_lift_link, pr2_world.get_body_by_name("r_shoulder_pan_link"))
-    base_footprint = pr2_world.get_body_by_name("base_footprint")
+    base_link = pr2_world.get_kinematic_structure_entity_by_name(PrefixedName("base_link"))
+    r_gripper_tool_frame = pr2_world.get_kinematic_structure_entity_by_name(PrefixedName('r_gripper_tool_frame'))
+    torso_lift_link = pr2_world.get_kinematic_structure_entity_by_name(PrefixedName("torso_lift_link"))
+    r_shoulder_pan_joint = pr2_world.get_connection(torso_lift_link, pr2_world.get_kinematic_structure_entity_by_name(PrefixedName("r_shoulder_pan_link")))
+    base_footprint = pr2_world.get_kinematic_structure_entity_by_name(PrefixedName("base_footprint"))
 
     # Rotation is 90 degrees around z-axis, translation is 1 along x-axis
     pose = np.array([[0., -1., 0., 1.],
@@ -355,8 +351,8 @@ def test_merge_with_pose_rotation(world_setup, pr2_world):
 
     world.merge_world_at_pose(pr2_world, TransformationMatrix(pose))
 
-    assert base_link in world.bodies
-    assert r_gripper_tool_frame in world.bodies
+    assert base_link in world.kinematic_structure_entities
+    assert r_gripper_tool_frame in world.kinematic_structure_entities
     assert torso_lift_link._world == world
     assert r_shoulder_pan_joint._world == world
     fk_base = world.compute_forward_kinematics_np(world.root, base_footprint)
@@ -370,7 +366,7 @@ def test_remove_connection(world_setup):
     connection = world.get_connection(l1, l2)
     with world.modify_world():
         world.remove_connection(connection)
-        world.remove_body(l2)
+        world.remove_kinematic_structure_entity(l2)
     assert connection not in world.connections
     # dof should still exist because it was a mimic connection.
     assert connection.dof.name in world.state
