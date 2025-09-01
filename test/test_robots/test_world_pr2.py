@@ -6,7 +6,7 @@ import pytest
 from rustworkx import NoPathFound
 
 from semantic_world.adapters.urdf import URDFParser
-from semantic_world.connections import OmniDrive
+from semantic_world.connections import OmniDrive, PrismaticConnection, RevoluteConnection
 from semantic_world.ik_solver import MaxIterationsException, UnreachableException
 from semantic_world.prefixed_name import PrefixedName
 from semantic_world.robots import PR2, KinematicChain
@@ -22,20 +22,20 @@ def test_compute_chain_of_bodies_pr2(pr2_world):
     tip_link = pr2_world.get_kinematic_structure_entity_by_name(PrefixedName('r_gripper_tool_frame'))
     real = pr2_world.compute_chain_of_kinematic_structure_entities(root=root_link, tip=tip_link)
     real = [x.name for x in real]
-    assert real == [PrefixedName(name='base_footprint', prefix='pr2_kinematic_tree'),
-                    PrefixedName(name='base_link', prefix='pr2_kinematic_tree'),
-                    PrefixedName(name='torso_lift_link', prefix='pr2_kinematic_tree'),
-                    PrefixedName(name='r_shoulder_pan_link', prefix='pr2_kinematic_tree'),
-                    PrefixedName(name='r_shoulder_lift_link', prefix='pr2_kinematic_tree'),
-                    PrefixedName(name='r_upper_arm_roll_link', prefix='pr2_kinematic_tree'),
-                    PrefixedName(name='r_upper_arm_link', prefix='pr2_kinematic_tree'),
-                    PrefixedName(name='r_elbow_flex_link', prefix='pr2_kinematic_tree'),
-                    PrefixedName(name='r_forearm_roll_link', prefix='pr2_kinematic_tree'),
-                    PrefixedName(name='r_forearm_link', prefix='pr2_kinematic_tree'),
-                    PrefixedName(name='r_wrist_flex_link', prefix='pr2_kinematic_tree'),
-                    PrefixedName(name='r_wrist_roll_link', prefix='pr2_kinematic_tree'),
-                    PrefixedName(name='r_gripper_palm_link', prefix='pr2_kinematic_tree'),
-                    PrefixedName(name='r_gripper_tool_frame', prefix='pr2_kinematic_tree')]
+    assert real == [PrefixedName(name='base_footprint', prefix='pr2'),
+                    PrefixedName(name='base_link', prefix='pr2'),
+                    PrefixedName(name='torso_lift_link', prefix='pr2'),
+                    PrefixedName(name='r_shoulder_pan_link', prefix='pr2'),
+                    PrefixedName(name='r_shoulder_lift_link', prefix='pr2'),
+                    PrefixedName(name='r_upper_arm_roll_link', prefix='pr2'),
+                    PrefixedName(name='r_upper_arm_link', prefix='pr2'),
+                    PrefixedName(name='r_elbow_flex_link', prefix='pr2'),
+                    PrefixedName(name='r_forearm_roll_link', prefix='pr2'),
+                    PrefixedName(name='r_forearm_link', prefix='pr2'),
+                    PrefixedName(name='r_wrist_flex_link', prefix='pr2'),
+                    PrefixedName(name='r_wrist_roll_link', prefix='pr2'),
+                    PrefixedName(name='r_gripper_palm_link', prefix='pr2'),
+                    PrefixedName(name='r_gripper_tool_frame', prefix='pr2')]
 
 
 def test_compute_chain_of_connections_pr2(pr2_world):
@@ -43,19 +43,19 @@ def test_compute_chain_of_connections_pr2(pr2_world):
     tip_link = pr2_world.get_kinematic_structure_entity_by_name(PrefixedName('r_gripper_tool_frame'))
     real = pr2_world.compute_chain_of_connections(root=root_link, tip=tip_link)
     real = [x.name for x in real]
-    assert real == [PrefixedName(name='base_footprint_T_base_link', prefix='pr2_kinematic_tree'),
-                    PrefixedName(name='base_link_T_torso_lift_link', prefix='pr2_kinematic_tree'),
-                    PrefixedName(name='torso_lift_link_T_r_shoulder_pan_link', prefix='pr2_kinematic_tree'),
-                    PrefixedName(name='r_shoulder_pan_link_T_r_shoulder_lift_link', prefix='pr2_kinematic_tree'),
-                    PrefixedName(name='r_shoulder_lift_link_T_r_upper_arm_roll_link', prefix='pr2_kinematic_tree'),
-                    PrefixedName(name='r_upper_arm_roll_link_T_r_upper_arm_link', prefix='pr2_kinematic_tree'),
-                    PrefixedName(name='r_upper_arm_link_T_r_elbow_flex_link', prefix='pr2_kinematic_tree'),
-                    PrefixedName(name='r_elbow_flex_link_T_r_forearm_roll_link', prefix='pr2_kinematic_tree'),
-                    PrefixedName(name='r_forearm_roll_link_T_r_forearm_link', prefix='pr2_kinematic_tree'),
-                    PrefixedName(name='r_forearm_link_T_r_wrist_flex_link', prefix='pr2_kinematic_tree'),
-                    PrefixedName(name='r_wrist_flex_link_T_r_wrist_roll_link', prefix='pr2_kinematic_tree'),
-                    PrefixedName(name='r_wrist_roll_link_T_r_gripper_palm_link', prefix='pr2_kinematic_tree'),
-                    PrefixedName(name='r_gripper_palm_link_T_r_gripper_tool_frame', prefix='pr2_kinematic_tree')]
+    assert real == [PrefixedName(name='base_footprint_joint', prefix='pr2'),
+                    PrefixedName(name='torso_lift_joint', prefix='pr2'),
+                    PrefixedName(name='r_shoulder_pan_joint', prefix='pr2'),
+                    PrefixedName(name='r_shoulder_lift_joint', prefix='pr2'),
+                    PrefixedName(name='r_upper_arm_roll_joint', prefix='pr2'),
+                    PrefixedName(name='r_upper_arm_joint', prefix='pr2'),
+                    PrefixedName(name='r_elbow_flex_joint', prefix='pr2'),
+                    PrefixedName(name='r_forearm_roll_joint', prefix='pr2'),
+                    PrefixedName(name='r_forearm_joint', prefix='pr2'),
+                    PrefixedName(name='r_wrist_flex_joint', prefix='pr2'),
+                    PrefixedName(name='r_wrist_roll_joint', prefix='pr2'),
+                    PrefixedName(name='r_gripper_palm_joint', prefix='pr2'),
+                    PrefixedName(name='r_gripper_tool_joint', prefix='pr2')]
 
 
 def test_compute_chain_of_bodies_error_pr2(pr2_world):
@@ -90,10 +90,8 @@ def test_get_split_chain_pr2(pr2_world):
     chain1, chain2 = pr2_world.compute_split_chain_of_connections(root, tip)
     chain1 = [n.name.name for n in chain1]
     chain2 = [n.name.name for n in chain2]
-    assert chain1 == ['l_gripper_r_finger_link_T_l_gripper_r_finger_tip_link',
-                      'l_gripper_palm_link_T_l_gripper_r_finger_link']
-    assert chain2 == ['l_gripper_palm_link_T_l_gripper_l_finger_link',
-                      'l_gripper_l_finger_link_T_l_gripper_l_finger_tip_link']
+    assert chain1 == ['l_gripper_r_finger_tip_joint', 'l_gripper_r_finger_joint']
+    assert chain2 == ['l_gripper_l_finger_joint', 'l_gripper_l_finger_tip_joint']
 
 
 def test_compute_fk_np_pr2(pr2_world):
@@ -115,6 +113,7 @@ def test_compute_fk_np_l_elbow_flex_joint_pr2(pr2_world):
     np.testing.assert_array_almost_equal(fk2, np.array(
         [[0.988771, 0., -0.149438, 0.4], [0., 1., 0., 0.], [0.149438, 0., 0.988771, 0.], [0., 0., 0., 1.]]))
 
+
 def test_compute_ik(pr2_world):
     bf = pr2_world.root
     eef = pr2_world.get_kinematic_structure_entity_by_name(PrefixedName('r_gripper_tool_frame'))
@@ -127,6 +126,7 @@ def test_compute_ik(pr2_world):
     actual_fk = pr2_world.compute_forward_kinematics_np(bf, eef)
     assert np.allclose(actual_fk, fk, atol=1e-3)
 
+
 def test_compute_ik_max_iter(pr2_world):
     bf = pr2_world.root
     eef = pr2_world.get_kinematic_structure_entity_by_name(PrefixedName('r_gripper_tool_frame'))
@@ -135,6 +135,7 @@ def test_compute_ik_max_iter(pr2_world):
     with pytest.raises(MaxIterationsException):
         pr2_world.compute_inverse_kinematics(bf, eef, fk)
 
+
 def test_compute_ik_unreachable(pr2_world):
     bf = pr2_world.root
     eef = pr2_world.get_kinematic_structure_entity_by_name(PrefixedName('base_footprint'))
@@ -142,6 +143,7 @@ def test_compute_ik_unreachable(pr2_world):
     fk[2, 3] = -1
     with pytest.raises(UnreachableException):
         pr2_world.compute_inverse_kinematics(bf, eef, fk)
+
 
 def test_apply_control_commands_omni_drive_pr2(pr2_world):
     omni_drive: OmniDrive = pr2_world.get_connection_by_name(PrefixedName('odom_combined_T_base_footprint'))
@@ -176,6 +178,30 @@ def test_apply_control_commands_omni_drive_pr2(pr2_world):
     assert pr2_world.state[omni_drive.y.name].velocity == 1.094837581924854
     assert pr2_world.state[omni_drive.y.name].position == 0.1094837581924854
 
+
+def test_search_for_connections_of_type(pr2_world: World):
+    connections = pr2_world.get_connections_by_type(OmniDrive)
+    assert len(connections) == 1
+    assert connections[0].name == PrefixedName(name='odom_combined_T_base_footprint', prefix='pr2')
+    assert connections[0].parent == pr2_world.root
+    assert connections[0].child == pr2_world.get_kinematic_structure_entity_by_name('base_footprint')
+
+    connections = pr2_world.get_connections_by_type(PrismaticConnection)
+    assert len(connections) == 3
+    assert connections[0].name == PrefixedName(name='torso_lift_joint', prefix='pr2')
+    assert connections[0].parent == pr2_world.get_kinematic_structure_entity_by_name('base_link')
+    assert connections[0].child == pr2_world.get_kinematic_structure_entity_by_name('torso_lift_link')
+    assert connections[1].name == PrefixedName(name='r_gripper_motor_slider_joint', prefix='pr2')
+    assert connections[1].parent == pr2_world.get_kinematic_structure_entity_by_name('r_gripper_palm_link')
+    assert connections[1].child == pr2_world.get_kinematic_structure_entity_by_name('r_gripper_motor_slider_link')
+    assert connections[2].name == PrefixedName(name='l_gripper_motor_slider_joint', prefix='pr2')
+    assert connections[2].parent == pr2_world.get_kinematic_structure_entity_by_name('l_gripper_palm_link')
+    assert connections[2].child == pr2_world.get_kinematic_structure_entity_by_name('l_gripper_motor_slider_link')
+
+    connections = pr2_world.get_connections_by_type(RevoluteConnection)
+    assert len(connections) == 40
+
+
 def test_pr2_view(pr2_world):
     pr2 = PR2.from_world(pr2_world)
 
@@ -198,3 +224,11 @@ def test_kinematic_chains(pr2_world):
     for chain in kinematic_chain_views:
         assert chain.root
         assert chain.tip
+
+
+def test_load_collision_config_srdf(pr2_world):
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        '..', '..', 'resources', 'collision_configs', 'pr2.srdf')
+    pr2_world.load_collision_srdf(path)
+    assert len([b for b in pr2_world.bodies if b.get_collision_config().disabled]) == 20
+    assert len(pr2_world.disabled_collision_pairs) == 1128

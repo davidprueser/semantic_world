@@ -25,6 +25,7 @@ if TYPE_CHECKING:
 
 id_generator = IDGenerator()
 
+
 @dataclass
 class Color:
     """
@@ -32,25 +33,35 @@ class Color:
     The values are stored as floats between 0 and 1.
     The default rgba_color is white.
     """
-    R: float = 1
+    R: float = 1.
     """
     Red value of the color.
     """
 
-    G: float = 1
+    G: float = 1.
     """
     Green value of the color.
     """
 
-    B: float = 1
+    B: float = 1.
     """
     Blue value of the color.
     """
 
-    A: float = 1
+    A: float = 1.
     """
     Opacity of the color.
     """
+
+    def __post_init__(self):
+        """
+        Make sure the color values are floats, because ros2 sucks.
+        """
+        self.R = float(self.R)
+        self.G = float(self.G)
+        self.B = float(self.B)
+        self.A = float(self.A)
+
 
 @dataclass
 class Scale:
@@ -73,12 +84,23 @@ class Scale:
     The scale in the z direction.
     """
 
+    def __post_init__(self):
+        """
+        Make sure the scale values are floats, because ros2 sucks.
+        """
+        self.x = float(self.x)
+        self.y = float(self.y)
+        self.z = float(self.z)
+
+
 @dataclass
 class Shape(ABC):
     """
     Base class for all shapes in the world.
     """
     origin: TransformationMatrix = field(default_factory=TransformationMatrix)
+
+    color: Color = field(default_factory=Color)
 
     @property
     @abstractmethod
@@ -96,6 +118,14 @@ class Shape(ABC):
         This should be implemented by subclasses.
         """
         ...
+
+
+@dataclass
+class Primitive(Shape):
+    """
+    A primitive shape.
+    """
+
 
 @dataclass
 class Mesh(Shape):
@@ -131,7 +161,6 @@ class Mesh(Shape):
 
 @dataclass
 class TriangleMesh(Shape):
-
     mesh: Optional[Trimesh] = None
     """
     The loaded mesh object.
@@ -155,14 +184,6 @@ class TriangleMesh(Shape):
         Returns the bounding box of the mesh.
         """
         return BoundingBox.from_mesh(self.mesh, self.origin.reference_frame)
-
-
-@dataclass
-class Primitive(Shape, ABC):
-    """
-    A primitive shape.
-    """
-    color: Color = field(default_factory=Color)
 
 
 @dataclass
@@ -367,7 +388,9 @@ class BoundingBox:
         """
         Check if the bounding box contains a point.
         """
-        x, y, z = (point.x.to_np(), point.y.to_np(), point.z.to_np()) if isinstance(point.z, Expression) else (point.x, point.y, point.z)
+        x, y, z = (point.x.to_np(), point.y.to_np(), point.z.to_np()) if isinstance(point.z, Expression) else (point.x,
+                                                                                                               point.y,
+                                                                                                               point.z)
 
         return self.simple_event.contains((x, y, z))
 
@@ -522,7 +545,6 @@ class BoundingBox:
         )
 
         return world_bb
-
 
 @dataclass
 class BoundingBoxCollection:

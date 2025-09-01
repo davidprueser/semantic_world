@@ -89,7 +89,7 @@ def two_arm_robot_world():
         localization_body = Body(name=PrefixedName('odom_combined'))
         world.add_kinematic_structure_entity(localization_body)
 
-        robot_parser = URDFParser(robot)
+        robot_parser = URDFParser.from_file(file_path=robot)
         world_with_robot = robot_parser.parse()
         # world_with_pr2.plot_kinematic_structure()
         root = world_with_robot.root
@@ -106,7 +106,7 @@ def pr2_world():
         localization_body = Body(name=PrefixedName('odom_combined'))
         world.add_kinematic_structure_entity(localization_body)
 
-        pr2_parser = URDFParser(pr2)
+        pr2_parser = URDFParser.from_file(file_path=pr2)
         world_with_pr2 = pr2_parser.parse()
         # world_with_pr2.plot_kinematic_structure()
         pr2_root = world_with_pr2.root

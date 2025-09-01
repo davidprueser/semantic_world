@@ -39,14 +39,6 @@ class DegreeOfFreedom(WorldEntity):
                                                         lambda d=derivative: self._world.state[self.name][d])
             self.symbols.data[derivative] = s
 
-    def reset_cache(self):
-        for method_name in dir(self):
-            try:
-                getattr(self, method_name).memo.clear()
-            except:
-                pass
-
-    @lru_cache(maxsize=None)
     def has_position_limits(self) -> bool:
         try:
             lower_limit = self.lower_limits.position

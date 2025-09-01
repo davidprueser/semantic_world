@@ -27,7 +27,7 @@ from os.path import join, dirname
 from semantic_world.reasoner import WorldReasoner
 from semantic_world.adapters.urdf import URDFParser
 
-kitchen_world = URDFParser(join(dirname(__file__), '..', 'resources', 'urdf', 'kitchen-small.urdf')).parse()
+kitchen_world = URDFParser.from_file(join(dirname(__file__), '..', 'resources', 'urdf', 'kitchen-small.urdf')).parse()
 reasoner = WorldReasoner(kitchen_world)
 found_concepts = reasoner.reason()
 
@@ -57,7 +57,7 @@ from semantic_world.adapters.urdf import URDFParser
 from semantic_world.views.views import Drawer
 
 def create_kitchen_world():
-    return URDFParser(join(dirname(__file__), '..', 'resources', 'urdf', 'kitchen-small.urdf')).parse()
+    return URDFParser.from_file(join(dirname(__file__), '..', 'resources', 'urdf', 'kitchen-small.urdf')).parse()
 
 kitchen_world = create_kitchen_world()
 reasoner = WorldReasoner(kitchen_world)

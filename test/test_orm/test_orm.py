@@ -31,7 +31,7 @@ class ORMTest(unittest.TestCase):
     def setUpClass(cls):
         super().setUpClass()
         cls.engine = create_engine('sqlite:///:memory:')
-        cls.table_world = URDFParser(cls.table).parse()
+        cls.table_world = URDFParser.from_file(file_path=cls.table).parse()
 
     def setUp(self):
         super().setUp()

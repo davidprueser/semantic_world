@@ -3,14 +3,19 @@ from __future__ import annotations
 import logging
 from abc import abstractmethod, ABC
 from dataclasses import dataclass, field
-from typing import Iterable, Set
+from functools import cached_property
+from typing import Iterable, Set, TYPE_CHECKING
 
 from typing_extensions import Optional, Self
 
+from .connections import ActiveConnection, OmniDrive
 from .prefixed_name import PrefixedName
 from .spatial_types.spatial_types import Vector3
-from .world import World
-from .world_entity import Body, RootedView, Connection, KinematicStructureEntity, Region
+from .world_entity import Body, RootedView, Connection, CollisionCheckingConfig
+from .world_entity import KinematicStructureEntity, Region
+
+if TYPE_CHECKING:
+    from .world import World
 
 
 @dataclass
@@ -352,6 +357,17 @@ class AbstractRobot(RootedView, ABC):
     A collection of all kinematic chains containing a sensor, such as a camera.
     """
 
+    default_collision_config: CollisionCheckingConfig = field(
+        kw_only=True,
+        default_factory=lambda: CollisionCheckingConfig(buffer_zone_distance=0.05))
+
+    @property
+    def controlled_connections(self) -> Set[ActiveConnection]:
+        """
+        A subset of the robot's connections that are controlled by a controller.
+        """
+        return self._world.controlled_connections & set(self.connections)
+
     @classmethod
     @abstractmethod
     def from_world(cls, world: World) -> Self:
@@ -365,6 +381,18 @@ class AbstractRobot(RootedView, ABC):
         :return: A robot view.
         """
         raise NotImplementedError("This method should be implemented in subclasses.")
+
+    @property
+    def drive(self) -> Optional[OmniDrive]:
+        """
+        The connection which the robot uses for driving.
+        """
+        try:
+            parent_connection = self.root.parent_connection
+            if isinstance(parent_connection, OmniDrive):
+                return parent_connection
+        except AttributeError:
+            pass
 
     def add_manipulator(self, manipulator: Manipulator):
         """
@@ -411,7 +439,6 @@ class AbstractRobot(RootedView, ABC):
         self._views.add(kinematic_chain)
         kinematic_chain.assign_to_robot(self)
 
-
 @dataclass
 class PR2(AbstractRobot):
     """
@@ -422,6 +449,9 @@ class PR2(AbstractRobot):
     neck: Neck = field(default=None)
     left_arm: KinematicChain = field(default=None)
     right_arm: KinematicChain = field(default=None)
+
+    def __hash__(self):
+        return hash(self.name)
 
     def _add_arm(self, arm: KinematicChain, arm_side: str):
         """
@@ -590,11 +620,12 @@ class PR2(AbstractRobot):
         # Create camera and neck
         camera = Camera(
             name=PrefixedName("wide_stereo_optical_frame", prefix=robot.name.name),
-            forward_facing_axis=Vector3(0, 0, 1),
-            field_of_view=FieldOfView(horizontal_angle=0.99483, vertical_angle=0.75049),
-            minimal_height=1.27,
-            maximal_height=1.60,
-            _world=world,
+            root=world.get_kinematic_structure_entity_by_name('wide_stereo_optical_frame'),
+                        forward_facing_axis=Vector3(0, 0, 1),
+                        field_of_view=FieldOfView(horizontal_angle=0.99483, vertical_angle=0.75049),
+                        minimal_height=1.27,
+                        maximal_height=1.60,
+                        _world=world,
         )
 
         neck = Neck(

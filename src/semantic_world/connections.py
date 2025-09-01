@@ -12,7 +12,7 @@ from .prefixed_name import PrefixedName
 from .spatial_types.derivatives import DerivativeMap
 from .spatial_types.math import quaternion_from_rotation_matrix
 from .types import NpMatrix4x4
-from .world_entity import Connection
+from .world_entity import Connection, CollisionCheckingConfig
 
 if TYPE_CHECKING:
     from .world import World
@@ -87,6 +87,9 @@ class FixedConnection(Connection):
     Has 0 degrees of freedom.
     """
 
+    def __hash__(self):
+        return hash((self.parent, self.child))
+
 
 @dataclass
 class ActiveConnection(Connection):
@@ -94,9 +97,32 @@ class ActiveConnection(Connection):
     Has one or more degrees of freedom that can be actively controlled, e.g., robot joints.
     """
 
+    is_controlled: bool = False
+    """
+    Whether this connection is linked to a controller and can therefore respond to control commands.
+    
+    E.g. the caster wheels of a PR2 are active, because they have a DOF, but they are not directly controlled. 
+    Instead a the omni drive connection is directly controlled and a low level controller translates these commands
+    to commands for the caster wheels.
+    
+    A door hinge is also active but cannot be controlled.
+    """
+
+    frozen_for_collision_avoidance: bool = False
+    """
+    Should be treated as fixed for collision avoidance.
+    Common example are gripper joints, you generally don't want to avoid collisions by closing the fingers, 
+    but by moving the whole hand away.
+    """
+
     @property
     def active_dofs(self) -> List[DegreeOfFreedom]:
         return []
+
+    def set_static_collision_config_for_direct_child_bodies(self, collision_config: CollisionCheckingConfig):
+        for child_body in self._world.get_direct_child_bodies_with_collision(self):
+            if not child_body.get_collision_config().disabled:
+                child_body.set_static_collision_config(collision_config)
 
 
 @dataclass
@@ -274,6 +300,9 @@ class Connection6DoF(PassiveConnection):
     Rotation of child KinematicStructureEntity with respect to parent KinematicStructureEntity represented as a quaternion.
     """
 
+    def __hash__(self):
+        return hash(self.name)
+
     def __post_init__(self):
         super().__post_init__()
         self._post_init_world_part()
@@ -444,3 +473,6 @@ class OmniDrive(ActiveConnection, PassiveConnection, HasUpdateState):
 
     def get_free_variable_names(self) -> List[PrefixedName]:
         return [self.x.name, self.y.name, self.yaw.name]
+
+    def __hash__(self):
+        return hash(self.name)

@@ -165,3 +165,19 @@ class DegreeOfFreedomMapping(AlternativeMapping[DegreeOfFreedom]):
         lower_limits = DerivativeMap(data=self.lower_limits)
         upper_limits = DerivativeMap(data=self.upper_limits)
         return DegreeOfFreedom(name=self.name, lower_limits=lower_limits, upper_limits=upper_limits)
+
+
+@dataclass
+class DegreeOfFreedomMapping(AlternativeMapping[DegreeOfFreedom]):
+    name: PrefixedName
+    lower_limits: List[float]
+    upper_limits: List[float]
+
+    @classmethod
+    def create_instance(cls, obj: DegreeOfFreedom):
+        return cls(name=obj.name, lower_limits=obj.lower_limits.data, upper_limits=obj.upper_limits.data)
+
+    def create_from_dao(self) -> DegreeOfFreedom:
+        lower_limits = DerivativeMap(data=self.lower_limits)
+        upper_limits = DerivativeMap(data=self.upper_limits)
+        return DegreeOfFreedom(name=self.name, lower_limits=lower_limits, upper_limits=upper_limits)

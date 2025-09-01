@@ -198,7 +198,7 @@ class ViewTestCase(unittest.TestCase):
         """
         Return the kitchen world parsed from the URDF file.
         """
-        parser = URDFParser(cls.kitchen)
+        parser = URDFParser.from_file(file_path=cls.kitchen)
         world = parser.parse()
         world.validate()
         return world
@@ -208,7 +208,7 @@ class ViewTestCase(unittest.TestCase):
         """
         Return the apartment world parsed from the URDF file.
         """
-        parser = URDFParser(cls.apartment)
+        parser = URDFParser.from_file(file_path=cls.apartment)
         world = parser.parse()
         world.validate()
         return world

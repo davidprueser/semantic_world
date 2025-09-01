@@ -5,6 +5,7 @@ import numpy as np
 from .derivatives import Derivatives
 from ..types import NpMatrix4x4, AnyMatrix4x4
 
+
 def quaternion_multiply(quaternion1: np.ndarray, quaternion0: np.ndarray) -> np.ndarray:
     x0, y0, z0, w0 = quaternion0
     x1, y1, z1, w1 = quaternion1
@@ -325,4 +326,3 @@ def quaternion_slerp(q1, q2, t):
     if 0.001 > abs(sin_half_theta):
         return 0.5 * q1 + 0.5 * q2
     return ratio_a * q1 + ratio_b * q2
-

@@ -64,6 +64,32 @@ class WorldEntity:
             self.name = PrefixedName(f"{self.__class__.__name__}_{hash(self)}")
 
 
+@dataclass
+class CollisionCheckingConfig:
+    buffer_zone_distance: Optional[float] = None
+    """
+    Distance defining a buffer zone around the entity. The buffer zone represents a soft boundary where
+    proximity should be monitored but minor violations are acceptable.
+    """
+
+    violated_distance: float = 0.0
+    """
+    Critical distance threshold that must not be violated. Any proximity below this threshold represents
+    a severe collision risk requiring immediate attention.
+    """
+
+    disabled: Optional[bool] = None
+    """
+    Flag to enable/disable collision checking for this entity. When True, all collision checks are ignored.
+    """
+
+    max_avoided_bodies: int = 1
+    """
+    Maximum number of other bodies this body should avoid simultaneously.
+    If more bodies than this are in the buffer zone, only the closest ones are avoided.
+    """
+
+
 @dataclass(unsafe_hash=True)
 class KinematicStructureEntity(WorldEntity):
     """
@@ -124,6 +150,45 @@ class Body(KinematicStructureEntity):
     The poses of the shapes are relative to the link.
     """
 
+    collision_config: Optional[CollisionCheckingConfig] = field(default_factory=CollisionCheckingConfig)
+    """
+    Configuration for collision checking.
+    """
+
+    temp_collision_config: Optional[CollisionCheckingConfig] = None
+    """
+    Temporary configuration for collision checking, takes priority over `collision_config`.
+    """
+
+    index: Optional[int] = field(default=None, init=False)
+    """
+    The index of the entity in `_world.kinematic_structure`.
+    """
+
+    def get_collision_config(self) -> CollisionCheckingConfig:
+        if self.temp_collision_config is not None:
+            return self.temp_collision_config
+        return self.collision_config
+
+    def set_static_collision_config(self, collision_config: CollisionCheckingConfig):
+        merged_config = CollisionCheckingConfig(
+            buffer_zone_distance=collision_config.buffer_zone_distance if collision_config.buffer_zone_distance is not None else self.collision_config.buffer_zone_distance,
+            violated_distance=collision_config.violated_distance,
+            disabled=collision_config.disabled if collision_config.disabled is not None else self.collision_config.disabled,
+            max_avoided_bodies=collision_config.max_avoided_bodies
+        )
+        self.collision_config = merged_config
+
+    def set_static_collision_distances(self, buffer_zone_distance: float, violated_distance: float):
+        self.collision_config.buffer_zone_distance = buffer_zone_distance
+        self.collision_config.violated_distance = violated_distance
+
+    def set_temporary_collision_config(self, collision_config: CollisionCheckingConfig):
+        self.temp_collision_config = collision_config
+
+    def reset_temporary_collision_config(self):
+        self.temp_collision_config = None
+
     def __post_init__(self):
         if not self.name:
             self.name = PrefixedName(f"body_{id_generator(self)}")
@@ -142,7 +207,14 @@ class Body(KinematicStructureEntity):
     def __eq__(self, other):
         return self.name == other.name and self._world is other._world
 
-    def has_collision(self) -> bool:
+    def has_collision(self, volume_threshold: float = 1.001e-6, surface_threshold: float = 0.00061) -> bool:
+        """
+        Check if collision geometry is mesh or simple shape with volume/surface bigger than thresholds.
+
+        :param volume_threshold: Ignore simple geometry shapes with a volume less than this (in m^3)
+        :param surface_threshold: Ignore simple geometry shapes with a surface area less than this (in m^2)
+        :return: True if collision geometry is mesh or simple shape exceeding thresholds
+        """
         return len(self.collision) > 0
 
     def compute_closest_points_multi(self, others: list[Body], sample_size=25) -> Tuple[
@@ -209,7 +281,7 @@ class Body(KinematicStructureEntity):
         return points_min_self, points_min_other, dist_min
 
     def as_bounding_box_collection_in_frame(
-        self, reference_frame: KinematicStructureEntity
+            self, reference_frame: KinematicStructureEntity
     ) -> BoundingBoxCollection:
         """
         Provides the bounding box collection for this entity in the given reference frame.
@@ -243,7 +315,7 @@ class Region(KinematicStructureEntity):
         return id(self)
 
     def as_bounding_box_collection_in_frame(
-        self, reference_frame: KinematicStructureEntity
+            self, reference_frame: KinematicStructureEntity
     ) -> BoundingBoxCollection:
         """
         Returns a bounding box collection that contains the bounding boxes of all areas in this region.
@@ -252,7 +324,10 @@ class Region(KinematicStructureEntity):
         bbs = [bb.transform_to_frame(reference_frame) for bb in bbs]
         return BoundingBoxCollection(reference_frame, bbs)
 
+
 GenericKinematicStructureEntity = TypeVar("GenericKinematicStructureEntity", bound=KinematicStructureEntity)
+
+
 @dataclass
 class View(WorldEntity):
     """
@@ -261,7 +336,9 @@ class View(WorldEntity):
     This class can hold references to certain bodies that gain meaning in this context.
     """
 
-    def _kinematic_structure_entities(self, visited: Set[int], aggregation_type: Type[GenericKinematicStructureEntity]) -> Set[GenericKinematicStructureEntity]:
+    def _kinematic_structure_entities(self, visited: Set[int],
+                                      aggregation_type: Type[GenericKinematicStructureEntity]) -> Set[
+        GenericKinematicStructureEntity]:
         """
         Recursively collects all entities that are part of this view.
         """
@@ -310,7 +387,6 @@ class View(WorldEntity):
         """
         return self._kinematic_structure_entities(set(), Body)
 
-
     @property
     def regions(self) -> Iterable[Region]:
         """
@@ -321,7 +397,7 @@ class View(WorldEntity):
         return self._kinematic_structure_entities(set(), Region)
 
     def as_bounding_box_collection_in_frame(
-        self, reference_frame: KinematicStructureEntity
+            self, reference_frame: KinematicStructureEntity
     ) -> BoundingBoxCollection:
         """
         Returns a bounding box collection that contains the bounding boxes of all bodies in this view.
@@ -348,6 +424,23 @@ class RootedView(View):
     Represents a view that is rooted in a specific KinematicStructureEntity.
     """
     root: KinematicStructureEntity = field(default=None)
+
+    @property
+    def connections(self) -> List[Connection]:
+        return self._world.get_connections_of_branch(self.root)
+
+    @property
+    def bodies(self) -> List[Body]:
+        return self._world.get_bodies_of_branch(self.root)
+
+    @property
+    def bodies_with_collisions(self) -> List[Body]:
+        return [x for x in self.bodies if x.has_collision()]
+
+    @property
+    def bodies_with_enabled_collision(self) -> Set[Body]:
+        return set(body for body in self.bodies if body.has_collision() and not body.get_collision_config().disabled)
+
 
 
 @dataclass(unsafe_hash=True)
@@ -458,7 +551,7 @@ def _is_entity_view_or_iterable(obj: object, aggregation_type: Type[KinematicStr
     Determines if an object is a KinematicStructureEntity, a View, or an Iterable (excluding strings and bytes).
     """
     return isinstance(obj, (aggregation_type, View)) or (
-        isinstance(obj, Iterable) and not isinstance(obj, (str, bytes, bytearray))
+            isinstance(obj, Iterable) and not isinstance(obj, (str, bytes, bytearray))
     )
 
 

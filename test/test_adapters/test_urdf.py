@@ -13,10 +13,10 @@ class URDFParserTestCase(unittest.TestCase):
     pr2 = os.path.join(urdf_dir, "pr2_kinematic_tree.urdf")
 
     def setUp(self):
-        self.table_parser = URDFParser(self.table)
-        self.kitchen_parser = URDFParser(self.kitchen)
-        self.apartment_parser = URDFParser(self.apartment)
-        self.pr2_parser = URDFParser(self.pr2)
+        self.table_parser = URDFParser.from_file(file_path=self.table)
+        self.kitchen_parser = URDFParser.from_file(file_path=self.kitchen)
+        self.apartment_parser = URDFParser.from_file(file_path=self.apartment)
+        self.pr2_parser = URDFParser.from_file(file_path=self.pr2)
 
     def test_table_parsing(self):
         world = self.table_parser.parse()

@@ -110,7 +110,7 @@ root = next(
 
 apartment = os.path.realpath(os.path.join(root, "resources", "urdf", "kitchen.urdf"))
 
-apartment_parser = URDFParser(apartment)
+apartment_parser = URDFParser.from_file(apartment)
 world = apartment_parser.parse()
 
 search_space = BoundingBox(min_x=-2, max_x=2,
