@@ -10,7 +10,6 @@ from semantic_world.connections import (
     FixedConnection,
     RevoluteConnection,
 )
-from ..adapters.viz_marker import VizMarkerPublisher
 from ..degree_of_freedom import DegreeOfFreedom
 from ..geometry import Scale, BoundingBoxCollection, Box
 from ..prefixed_name import PrefixedName
@@ -33,7 +32,6 @@ from ..views.views import (
 )
 from ..world import World
 from ..world_entity import Body
-import rclpy
 
 id_generator = IDGenerator()
 

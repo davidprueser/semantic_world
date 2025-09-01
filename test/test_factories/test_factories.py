@@ -1,7 +1,6 @@
 import time
 import unittest
 
-from semantic_world.adapters.viz_marker import VizMarkerPublisher
 from semantic_world.geometry import Scale
 from semantic_world.prefixed_name import PrefixedName
 from semantic_world.spatial_types.spatial_types import TransformationMatrix
@@ -16,9 +15,6 @@ from semantic_world.views.factories import (
     DresserFactory,
     WallFactory, HoleHandleFactory, IkeaDrawerFactory,
 )
-import rclpy
-
-rclpy.init()
 
 class TestFactories(unittest.TestCase):
     def test_handle_factory(self):
@@ -61,9 +57,6 @@ class TestFactories(unittest.TestCase):
             handle_factory=OuterHandleFactory(name=PrefixedName("handle")),
         )
         world = factory.create()
-        node = rclpy.create_node("test_double_door_factory")
-        v = VizMarkerPublisher(world, node)
-        time.sleep(100)
         door_views = world.get_views_by_type(Door)
         self.assertEqual(len(door_views), 2)
 
@@ -106,9 +99,6 @@ class TestFactories(unittest.TestCase):
 
         drawer: Drawer = drawer_views[0]
         self.assertEqual(world.root, drawer.container.body)
-        node = rclpy.create_node("test_drawer_factory")
-        VizMarkerPublisher(world, node)
-        time.sleep(60)
 
     def test_dresser_factory(self):
         drawer_factory = DrawerFactory(
