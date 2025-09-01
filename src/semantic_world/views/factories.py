@@ -28,7 +28,7 @@ from ..views.views import (
     Drawer,
     Door,
     Wall,
-    DoubleDoor,
+    DoubleDoor, EntryWay, Table,
 )
 from ..world import World
 from ..world_entity import Body
@@ -46,6 +46,9 @@ class Direction(IntEnum):
 
 
 def event_from_scale(scale: Scale):
+    """
+    Return a simple event representing a box centered at the origin with the given scale.
+    """
     return SimpleEvent(
         {
             SpatialVariables.x.value: closed(-scale.x / 2, scale.x / 2),
@@ -181,7 +184,7 @@ class ContainerFactory(ViewFactory[Container]):
 
 
 @dataclass
-class HandleFactory(ViewFactory[Handle]):
+class OuterHandleFactory(ViewFactory[Handle]):
     """
     Factory for creating a handle with a specified scale and thickness.
     The handle is represented as a box with an inner cutout to create the handle shape.
@@ -286,7 +289,7 @@ class DoorFactory(EntryWayFactory[Door]):
     The doors origin is at the pivot point of the door, not at the center.
     """
 
-    handle_factory: HandleFactory = field(default=None)
+    handle_factory: OuterHandleFactory = field(default=None)
     """
     The factory used to create the handle of the door.
     """
@@ -400,7 +403,7 @@ class DoubleDoorFactory(EntryWayFactory[DoubleDoor]):
     Factory for creating a double door with two doors and their handles.
     """
 
-    handle_factory: HandleFactory = field(default=None)
+    handle_factory: OuterHandleFactory = field(default=None)
     """
     The factory used to create the handles of the doors.
     """
@@ -450,7 +453,7 @@ class DoubleDoorFactory(EntryWayFactory[DoubleDoor]):
             handle_name = PrefixedName(
                 self.name.name + f"_{index}_handle", self.name.prefix
             )
-            handle_factory = HandleFactory(
+            handle_factory = OuterHandleFactory(
                 handle_name,
                 self.handle_factory.scale,
                 self.handle_factory.thickness,
@@ -507,7 +510,7 @@ class DrawerFactory(ViewFactory[Drawer]):
     Factory for creating a drawer with a handle and a container.
     """
 
-    handle_factory: HandleFactory = field(default=None)
+    handle_factory: OuterHandleFactory = field(default=None)
     """
     The factory used to create the handle of the drawer.
     """
@@ -910,6 +913,273 @@ class WallFactory(ViewFactory[Wall]):
                     )
 
                     wall_world.merge_world(door_world, connection)
+
+@dataclass
+class HoleHandleFactory(ViewFactory[Handle]):
+    """
+    Factory that cuts a hole into a wall.
+    """
+
+    scale: Scale = field(default_factory=lambda: Scale(0.1, 0.2, 0.05))
+    """
+    The scale of the handle.
+    """
+
+    def create(self) -> World:
+        handle_event = self.create_handle_event()
+
+        handle = Body(name=self.name)
+        collision = BoundingBoxCollection.from_simple_event(handle, handle_event).as_shapes()
+        handle.collision = collision
+        handle.visual = collision
+
+        handle_view = Handle(name=self.name, body=handle)
+
+        world = World()
+        world.add_kinematic_structure_entity(handle)
+        world.add_view(handle_view)
+        return world
+
+    def create_handle_event(self) -> SimpleEvent:
+        x_interval = closed(-self.scale.x / 2, self.scale.x / 2)
+        y_interval = closed(-self.scale.y / 2, self.scale.y / 2)
+        z_interval = closed(0, self.scale.z)
+
+        handle_event = SimpleEvent(
+            {
+                SpatialVariables.x.value: x_interval,
+                SpatialVariables.y.value: y_interval,
+                SpatialVariables.z.value: z_interval,
+            }
+        )
+        return handle_event
+
+
+@dataclass
+class IkeaDrawerFactory(ViewFactory[Drawer]):
+    """
+    Factory for an IKEA ALEX drawer.
+    Returns a drawer.
+    """
+
+    name: PrefixedName
+    """
+    The name of the drawer (applied to the drawer body and Drawer view).
+    """
+
+    handle_factory: HoleHandleFactory
+    """
+    The factory for the handle.
+    """
+
+    container_factory: ContainerFactory
+    """
+    The factory for the container.
+    """
+
+    def create(self) -> World:
+        # Handle ausschneiden und dann einen teil als handle wieder hinzufuegen indem man handle setzt und dann sagt alles darueber weg
+        # Danach eine Box erstellen, die man hinter frontseite packt und dann container event - box nimmt
+        self.handle_factory.scale = Scale(self.container_factory.wall_thickness,
+                                          self.container_factory.scale.y / 2,
+                                          self.handle_factory.scale.z + 0.05)
+
+        drawer_world = World()
+        drawer_body = Body(name=self.name)
+        collision = self._create_container_collision(drawer_body)
+        drawer_body.collision = collision
+        drawer_body.visual = collision
+        drawer_world.add_kinematic_structure_entity(drawer_body)
+
+        container_world = self.container_factory.create()
+        container_view = container_world.get_views_by_type(Container)[0]
+
+        handle_world = self.handle_factory.create()
+        handle_view = handle_world.get_views_by_type(Handle)[0]
+
+        drawer = Drawer(name=self.name, container=container_view, handle=handle_view)
+        drawer_world.add_view(drawer)
+
+        return drawer_world
+
+
+    def _create_container_collision(self, body: Body) -> List[Box]:
+        container_event = self.container_factory.create_container_event()
+        container_event = self._remove_handle_part_from_container(container_event)
+
+        bounding_box_collection = BoundingBoxCollection.from_event(body, container_event)
+
+        container_collision = bounding_box_collection.as_shapes()
+        return container_collision
+
+
+    def _remove_handle_part_from_container(self, container_event: Event) -> Event:
+        container_world = self.container_factory.create()
+        handle_world = self.handle_factory.create()
+        handle_view = handle_world.get_views_by_type(Handle)[0]
+
+        drawer_T_handle = TransformationMatrix.from_xyz_rpy(
+            self.container_factory.scale.x / 2, (self.container_factory.scale.y / 2) - self.handle_factory.scale.y,
+            (self.container_factory.scale.z / 2), 0, 0, 0
+        )
+
+        connection_drawer_T_handle = FixedConnection(
+            parent=container_world.root,
+            child=handle_world.root,
+            origin_expression=drawer_T_handle,
+        )
+
+        container_world.merge_world(handle_world, connection_drawer_T_handle)
+        handle_event = handle_view.body.as_bounding_box_collection_in_frame(container_world.root).event
+        # container_event -= handle_event
+        return container_event
+
+
+# @dataclass
+# class IKEAAlexStorage(ViewFactory[Dresser]):
+#     """
+#     Factory for an IKEA ALEX storage unit with a single door that can open.
+#     Returns a Dresser view with a Container and one Door.
+#     """
+#
+#     name: PrefixedName
+#     scale: Scale = field(default_factory=lambda: Scale(0.58, 0.36, 0.70))
+#     wall_thickness: float = 0.02
+#
+#     def create(self) -> World:
+#         # CONTAINER
+#         container_factory = ContainerFactory(
+#             name=self.name,
+#             scale=self.scale,
+#             wall_thickness=self.wall_thickness,
+#             direction=Direction.Y,
+#         )
+#         world = container_factory.create()
+#         container_view: Container = world.get_views_by_type(Container)[0]
+#
+#         # DOOR
+#         handle_factory = HandleFactory(
+#             name=PrefixedName(f"{self.name.name}_handle", self.name.prefix)
+#         )
+#         door_factory = DoorFactory(
+#             name=PrefixedName(f"{self.name.name}_door", self.name.prefix),
+#             handle_factory=handle_factory,
+#             handle_direction=Direction.NEGATIVE_X,
+#             scale=Scale(self.scale.x, self.wall_thickness, self.scale.z),
+#         )
+#         parent_T_door = TransformationMatrix.from_point_rotation_matrix(
+#             Point3(self.scale.x / 2, self.scale.y / 2, self.scale.z / 2)
+#         )
+#         add_door_to_world(
+#             door_factory=door_factory,
+#             parent_T_door=parent_T_door,
+#             parent_world=world,
+#         )
+#         doors = world.get_views_by_type(Door)
+#
+#         dresser_view = Dresser(
+#             name=self.name,
+#             container=container_view,
+#             drawers=[],
+#             doors=doors,
+#         )
+#         world.add_view(dresser_view, exists_ok=True)
+#         return world
+#
+#
+# @dataclass
+# class IKEALangkaptenAlexTableFactory(ViewFactory[Table]):
+#     """
+#     Factory for creating an IKEA-style table setup consisting of two cabinet units (foundations)
+#     and a tabletop on top. The world root is the tabletop; the two units are merged under the top.
+#     """
+#
+#     name: PrefixedName
+#     """
+#     The name of the table (applied to the tabletop body and Table view).
+#     """
+#
+#     top_scale: Scale = field(default_factory=lambda: Scale(1.4, 0.6, 0.03))
+#     """
+#     The size of the tabletop (x=depth, y=width, z=thickness).
+#     """
+#
+#     unit_factories: List[ViewFactory] = field(default_factory=list, hash=False)
+#     """
+#     Exactly two unit factories are expected. If empty, one IKEAAlexDrawerFactory and one IKEAAlexStorage will be created.
+#     """
+#
+#     def create(self) -> World:
+#         """
+#         Return a world representing the IKEA LAGKAPTEN + ALEX table: a tabletop body as root, with
+#         two units placed underneath as fixed children.
+#         """
+#         factories: List[ViewFactory] = list(self.unit_factories)
+#         if len(factories) == 0:
+#             unit_scale = Scale(self.top_scale.x / 3, self.top_scale.y - 0.1, 0.70)
+#             factories = [
+#                 IKEAAlexDrawerFactory(name=PrefixedName("alex_drawers", self.name.prefix), scale=unit_scale),
+#                 IKEAAlexStorage(name=PrefixedName("alex_storage", self.name.prefix), scale=unit_scale),
+#             ]
+#         assert len(factories) == 2
+#
+#         # Create tabletop body as world root
+#         top_event = event_from_scale(self.top_scale).as_composite_set()
+#         top_body = Body(name=self.name)
+#         top_collision = BoundingBoxCollection.from_event(top_event).as_shapes(top_body)
+#         top_body.collision = top_collision
+#         top_body.visual = top_collision
+#
+#         world = World()
+#         world.add_body(top_body)
+#
+#         # Create and merge unit worlds beneath the tabletop
+#         for idx, factory in enumerate(factories):
+#             unit_world = factory.create()
+#             unit_root = unit_world.root
+#
+#             # Determine unit dimensions from its bounding box relative to itself
+#             unit_event = unit_root.as_bounding_box_collection(unit_root).event
+#             # Compute unit extents using BoundingBoxCollection to avoid direct Interval attribute access
+#             unit_bcs = BoundingBoxCollection.from_event(unit_event)
+#             if len(unit_bcs.bounding_boxes) == 0:
+#                 # Fallback to tabletop-supported default if no boxes present
+#                 unit_x = self.top_scale.x / 3
+#                 unit_y = self.top_scale.y / 3
+#                 unit_z = self.top_scale.z
+#             else:
+#                 min_x = min(bb.min_x for bb in unit_bcs.bounding_boxes)
+#                 max_x = max(bb.max_x for bb in unit_bcs.bounding_boxes)
+#                 min_y = min(bb.min_y for bb in unit_bcs.bounding_boxes)
+#                 max_y = max(bb.max_y for bb in unit_bcs.bounding_boxes)
+#                 min_z = min(bb.min_z for bb in unit_bcs.bounding_boxes)
+#                 max_z = max(bb.max_z for bb in unit_bcs.bounding_boxes)
+#                 unit_x = max_x - min_x
+#                 unit_y = max_y - min_y
+#                 unit_z = max_z - min_z
+#
+#             # Vertical placement: directly under the tabletop
+#             z = -((self.top_scale.z / 2) + (unit_z / 2))
+#             # Horizontal placement along X near ends; centered in Y
+#             x_edge_offset = (self.top_scale.x / 2) - (unit_x / 2)
+#             x = -x_edge_offset if idx == 0 else x_edge_offset
+#             y = 0.0
+#
+#             transform = TransformationMatrix.from_xyz_rpy(x, y, z, 0, 0, 0)
+#             connection = FixedConnection(
+#                 parent=world.root,
+#                 child=unit_world.root,
+#                 origin_expression=transform,
+#             )
+#             world.merge_world(unit_world, connection)
+#
+#         # Add the Table view, referencing the tabletop body
+#         table_view = Table(top=top_body)
+#         world.add_view(table_view)
+#
+#         return world
+
+
 
 def add_door_to_world(
     door_factory: DoorFactory, parent_T_door: TransformationMatrix, parent_world: World

@@ -1,25 +1,29 @@
+import time
 import unittest
 
+from semantic_world.adapters.viz_marker import VizMarkerPublisher
 from semantic_world.geometry import Scale
 from semantic_world.prefixed_name import PrefixedName
 from semantic_world.spatial_types.spatial_types import TransformationMatrix
 from semantic_world.views.views import Handle, Door, Container, Drawer, Dresser, Wall
 from semantic_world.views.factories import (
-    HandleFactory,
+    OuterHandleFactory,
     Direction,
     DoorFactory,
     ContainerFactory,
     DoubleDoorFactory,
     DrawerFactory,
     DresserFactory,
-    WallFactory,
+    WallFactory, HoleHandleFactory,
 )
+import rclpy
 
+rclpy.init()
 
 class TestFactories(unittest.TestCase):
     def test_handle_factory(self):
 
-        factory = HandleFactory(name=PrefixedName("handle"))
+        factory = OuterHandleFactory(name=PrefixedName("handle"))
         world = factory.create()
         handle_views = world.get_views_by_type(Handle)
         self.assertEqual(len(handle_views), 1)
@@ -29,7 +33,7 @@ class TestFactories(unittest.TestCase):
 
         # this belongs into whatever tests merge_world, and with dummy objects, not handles
         for i in range(10):
-            factory = HandleFactory(name=PrefixedName(f"handle_{i}"))
+            factory = OuterHandleFactory(name=PrefixedName(f"handle_{i}"))
             world.merge_world(factory.create())
 
         self.assertEqual(world.root.name.name, "handle")
@@ -40,7 +44,7 @@ class TestFactories(unittest.TestCase):
     def test_door_factory(self):
         factory = DoorFactory(
             name=PrefixedName("door"),
-            handle_factory=HandleFactory(name=PrefixedName("handle")),
+            handle_factory=OuterHandleFactory(name=PrefixedName("handle")),
             handle_direction=Direction.Y,
         )
         world = factory.create()
@@ -54,9 +58,12 @@ class TestFactories(unittest.TestCase):
     def test_double_door_factory(self):
         factory = DoubleDoorFactory(
             name=PrefixedName("double_door"),
-            handle_factory=HandleFactory(name=PrefixedName("handle")),
+            handle_factory=OuterHandleFactory(name=PrefixedName("handle")),
         )
         world = factory.create()
+        node = rclpy.create_node("test_double_door_factory")
+        v = VizMarkerPublisher(world, node)
+        time.sleep(100)
         door_views = world.get_views_by_type(Door)
         self.assertEqual(len(door_views), 2)
 
@@ -65,6 +72,24 @@ class TestFactories(unittest.TestCase):
         self.assertIsInstance(doors[0].handle, Handle)
         self.assertIsInstance(doors[1].handle, Handle)
         self.assertNotEqual(doors[0].handle, doors[1].handle)
+
+    def test_ikea_langkapten_alex_table_factory_visualization(self):
+        # from semantic_world.views import Table, Dresser
+        from semantic_world.views.factories import IkeaDrawerFactory
+
+        container_event = ContainerFactory(name=PrefixedName("container"), direction=Direction.Z, scale=Scale(0.5,0.4,0.2), wall_thickness=0.06)
+
+        factory = IkeaDrawerFactory(name=PrefixedName("ikea_drawer"),
+                                    handle_factory=HoleHandleFactory(name=PrefixedName("handle"), scale=Scale(0.01, 0.05, 0.06)),
+                                    container_factory=container_event)
+        world = factory.create()
+        node = rclpy.create_node("test_ikea_langkapten_alex_table_factory")
+        v = VizMarkerPublisher(world, node)
+        time.sleep(600)
+        # table_views = world.get_views_by_type(Table)
+        # unit_views = world.get_views_by_type(Dresser)
+        # self.assertEqual(len(table_views), 1)
+        # self.assertEqual(len(unit_views), 2)
 
     def test_container_factory(self):
         factory = ContainerFactory(name=PrefixedName("container"))
@@ -76,11 +101,10 @@ class TestFactories(unittest.TestCase):
         self.assertEqual(world.root, container.body)
 
     def test_drawer_factory(self):
-
         factory = DrawerFactory(
             name=PrefixedName("drawer"),
-            container_factory=ContainerFactory(name=PrefixedName("container")),
-            handle_factory=HandleFactory(name=PrefixedName("handle")),
+            container_factory=ContainerFactory(name=PrefixedName("container"), direction=Direction.Z),
+            handle_factory=OuterHandleFactory(name=PrefixedName("handle")),
         )
         world = factory.create()
         drawer_views = world.get_views_by_type(Drawer)
@@ -88,18 +112,21 @@ class TestFactories(unittest.TestCase):
 
         drawer: Drawer = drawer_views[0]
         self.assertEqual(world.root, drawer.container.body)
+        node = rclpy.create_node("test_drawer_factory")
+        VizMarkerPublisher(world, node)
+        time.sleep(60)
 
     def test_dresser_factory(self):
         drawer_factory = DrawerFactory(
             name=PrefixedName("drawer"),
             container_factory=ContainerFactory(name=PrefixedName("drawer_container")),
-            handle_factory=HandleFactory(name=PrefixedName("drawer_handle")),
+            handle_factory=OuterHandleFactory(name=PrefixedName("drawer_handle")),
         )
         drawer_transform = TransformationMatrix()
 
         door_factory = DoorFactory(
             name=PrefixedName("door"),
-            handle_factory=HandleFactory(name=PrefixedName("door_handle")),
+            handle_factory=OuterHandleFactory(name=PrefixedName("door_handle")),
             handle_direction=Direction.Y,
         )
 
@@ -130,7 +157,7 @@ class TestFactories(unittest.TestCase):
 
         door_factory = DoorFactory(
             name=PrefixedName("door"),
-            handle_factory=HandleFactory(name=PrefixedName("handle")),
+            handle_factory=OuterHandleFactory(name=PrefixedName("handle")),
             handle_direction=Direction.Y,
         )
 
@@ -138,7 +165,7 @@ class TestFactories(unittest.TestCase):
 
         double_door_factory = DoubleDoorFactory(
             name=PrefixedName("double_door"),
-            handle_factory=HandleFactory(name=PrefixedName("handle")),
+            handle_factory=OuterHandleFactory(name=PrefixedName("handle")),
         )
         double_door_transform = TransformationMatrix()
 
