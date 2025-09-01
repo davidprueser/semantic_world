@@ -77,19 +77,19 @@ class TestFactories(unittest.TestCase):
         # from semantic_world.views import Table, Dresser
         from semantic_world.views.factories import IkeaDrawerFactory
 
-        container_event = ContainerFactory(name=PrefixedName("container"), direction=Direction.Z, scale=Scale(0.5,0.4,0.2), wall_thickness=0.06)
+        container_event = ContainerFactory(name=PrefixedName("container"), direction=Direction.Z, scale=Scale(0.52,0.3,0.14), wall_thickness=0.02)
 
         factory = IkeaDrawerFactory(name=PrefixedName("ikea_drawer"),
-                                    handle_factory=HoleHandleFactory(name=PrefixedName("handle"), scale=Scale(0.01, 0.05, 0.06)),
+                                    handle_factory=HoleHandleFactory(name=PrefixedName("handle"), scale=Scale(0.01, 0.05, 0.01)),
                                     container_factory=container_event)
         world = factory.create()
+        drawer_views = world.get_views_by_type(Drawer)
+        self.assertEqual(len(drawer_views), 1)
+        self.assertEqual(len(drawer_views[0].bodies), 2)
+        self.assertEqual(len(world.bodies), 2)
         node = rclpy.create_node("test_ikea_langkapten_alex_table_factory")
         v = VizMarkerPublisher(world, node)
         time.sleep(600)
-        # table_views = world.get_views_by_type(Table)
-        # unit_views = world.get_views_by_type(Dresser)
-        # self.assertEqual(len(table_views), 1)
-        # self.assertEqual(len(unit_views), 2)
 
     def test_container_factory(self):
         factory = ContainerFactory(name=PrefixedName("container"))

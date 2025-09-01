@@ -10,6 +10,7 @@ from semantic_world.connections import (
     FixedConnection,
     RevoluteConnection,
 )
+from ..adapters.viz_marker import VizMarkerPublisher
 from ..degree_of_freedom import DegreeOfFreedom
 from ..geometry import Scale, BoundingBoxCollection, Box
 from ..prefixed_name import PrefixedName
@@ -32,6 +33,7 @@ from ..views.views import (
 )
 from ..world import World
 from ..world_entity import Body
+import rclpy
 
 id_generator = IDGenerator()
 
@@ -920,7 +922,7 @@ class HoleHandleFactory(ViewFactory[Handle]):
     Factory that cuts a hole into a wall.
     """
 
-    scale: Scale = field(default_factory=lambda: Scale(0.1, 0.2, 0.05))
+    scale: Scale = field(default_factory=lambda: Scale(0.1, 0.05, 0.03))
     """
     The scale of the handle.
     """
@@ -978,15 +980,21 @@ class IkeaDrawerFactory(ViewFactory[Drawer]):
     """
 
     def create(self) -> World:
+        """
+        Return a world with a drawer at its root. The drawer consists of a container and a handle.
+        1. Create the drawer body by creating a container event and removing a small cutout from the front to create a graspable part.
+        2. Create the container and handle using their respective factories.
+        3. Add the handle to the drawer body at the correct position.
+        """
         # Handle ausschneiden und dann einen teil als handle wieder hinzufuegen indem man handle setzt und dann sagt alles darueber weg
         # Danach eine Box erstellen, die man hinter frontseite packt und dann container event - box nimmt
-        self.handle_factory.scale = Scale(self.container_factory.wall_thickness,
+        self.handle_factory.scale = Scale(self.container_factory.wall_thickness / 2,
                                           self.container_factory.scale.y / 2,
-                                          self.handle_factory.scale.z + 0.05)
+                                          self.handle_factory.scale.z)
 
         drawer_world = World()
         drawer_body = Body(name=self.name)
-        collision = self._create_container_collision(drawer_body)
+        collision = self._create_drawer_collision(drawer_body)
         drawer_body.collision = collision
         drawer_body.visual = collision
         drawer_world.add_kinematic_structure_entity(drawer_body)
@@ -997,42 +1005,102 @@ class IkeaDrawerFactory(ViewFactory[Drawer]):
         handle_world = self.handle_factory.create()
         handle_view = handle_world.get_views_by_type(Handle)[0]
 
+        self._add_handle_to_drawer(drawer_world, handle_world)
+
         drawer = Drawer(name=self.name, container=container_view, handle=handle_view)
         drawer_world.add_view(drawer)
 
         return drawer_world
 
 
-    def _create_container_collision(self, body: Body) -> List[Box]:
+    def _create_drawer_collision(self, body: Body) -> List[Box]:
+        """
+        Create the collision shapes for the drawer body by creating a container event, removing the graspable part from the container,
+        and converting the resulting event to shapes.
+        """
         container_event = self.container_factory.create_container_event()
-        container_event = self._remove_handle_part_from_container(container_event)
+        container_event = self._remove_graspable_part_from_container(container_event)
 
         bounding_box_collection = BoundingBoxCollection.from_event(body, container_event)
 
         container_collision = bounding_box_collection.as_shapes()
         return container_collision
 
+    def _remove_graspable_part_from_container(self, container_event: Event) -> Event:
+        """
+        Remove a small cutout from the front of the drawer to create a graspable part.
+        This cutout will partly be filled by a handle later.
 
-    def _remove_handle_part_from_container(self, container_event: Event) -> Event:
-        container_world = self.container_factory.create()
-        handle_world = self.handle_factory.create()
-        handle_view = handle_world.get_views_by_type(Handle)[0]
+        :param container_event: The event representing the container.
+        :return: The modified container event with the cutout removed.
+        """
+        cutout_x = closed(self.container_factory.scale.x / 2 - self.container_factory.wall_thickness / 2,
+                          self.container_factory.scale.x / 2 + self.container_factory.wall_thickness / 2)
+        cutout_y = closed(-self.container_factory.scale.y / 4, self.container_factory.scale.y / 4)
+        cutout_z = closed(self.container_factory.scale.z / 3, self.container_factory.scale.z / 2)
 
+        cutout_event = SimpleEvent(
+            {
+                SpatialVariables.x.value: cutout_x,
+                SpatialVariables.y.value: cutout_y,
+                SpatialVariables.z.value: cutout_z
+            }
+        ).as_composite_set()
+
+        container_event -= cutout_event
+        return container_event
+
+    def _add_handle_to_drawer(self, drawer_world: World, handle_world: World):
+        """
+        Add the handle to the drawer world at the correct position. It will be placed in the lower part of the cutout on the front side of the drawer.
+        This way, the handle is flush with the front of the drawer and can be grasped.
+
+        :param drawer_world: The world containing the drawer body as its root.
+        :param handle_world: The world containing the handle body as its root.
+        """
         drawer_T_handle = TransformationMatrix.from_xyz_rpy(
-            self.container_factory.scale.x / 2, (self.container_factory.scale.y / 2) - self.handle_factory.scale.y,
-            (self.container_factory.scale.z / 2), 0, 0, 0
+            (self.container_factory.scale.x / 2) - (self.container_factory.wall_thickness / 4) , 0, (self.container_factory.scale.z / 3), 0, 0, 0
         )
 
         connection_drawer_T_handle = FixedConnection(
-            parent=container_world.root,
+            parent=drawer_world.root,
             child=handle_world.root,
             origin_expression=drawer_T_handle,
         )
 
-        container_world.merge_world(handle_world, connection_drawer_T_handle)
-        handle_event = handle_view.body.as_bounding_box_collection_in_frame(container_world.root).event
+        drawer_world.merge_world(handle_world, connection_drawer_T_handle)
+
+
+        # def create(self) -> World:
+        #     handle_event = self.create_handle_event()
+        #
+        #     handle = Body(name=self.name)
+        #     collision = BoundingBoxCollection.from_simple_event(handle, handle_event).as_shapes()
+        #     handle.collision = collision
+        #     handle.visual = collision
+        #
+        #     handle_view = Handle(name=self.name, body=handle)
+        #
+        #     world = World()
+        #     world.add_kinematic_structure_entity(handle)
+        #     world.add_view(handle_view)
+        #     return world
+        #
+        # def create_handle_event(self) -> SimpleEvent:
+        #     x_interval = closed(-self.scale.x / 2, self.scale.x / 2)
+        #     y_interval = closed(-self.scale.y / 2, self.scale.y / 2)
+        #     z_interval = closed(0, self.scale.z)
+        #
+        #     handle_event = SimpleEvent(
+        #         {
+        #             SpatialVariables.x.value: x_interval,
+        #             SpatialVariables.y.value: y_interval,
+        #             SpatialVariables.z.value: z_interval,
+        #         }
+        #     )
+        #     return handle_event
+        #
         # container_event -= handle_event
-        return container_event
 
 
 # @dataclass
