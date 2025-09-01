@@ -14,7 +14,7 @@ from semantic_world.views.factories import (
     DoubleDoorFactory,
     DrawerFactory,
     DresserFactory,
-    WallFactory, HoleHandleFactory,
+    WallFactory, HoleHandleFactory, IkeaDrawerFactory,
 )
 import rclpy
 
@@ -73,10 +73,7 @@ class TestFactories(unittest.TestCase):
         self.assertIsInstance(doors[1].handle, Handle)
         self.assertNotEqual(doors[0].handle, doors[1].handle)
 
-    def test_ikea_langkapten_alex_table_factory_visualization(self):
-        # from semantic_world.views import Table, Dresser
-        from semantic_world.views.factories import IkeaDrawerFactory
-
+    def test_ikea_alex_drawer_factory(self):
         container_event = ContainerFactory(name=PrefixedName("container"), direction=Direction.Z, scale=Scale(0.52,0.3,0.14), wall_thickness=0.02)
 
         factory = IkeaDrawerFactory(name=PrefixedName("ikea_drawer"),
@@ -87,9 +84,6 @@ class TestFactories(unittest.TestCase):
         self.assertEqual(len(drawer_views), 1)
         self.assertEqual(len(drawer_views[0].bodies), 2)
         self.assertEqual(len(world.bodies), 2)
-        node = rclpy.create_node("test_ikea_langkapten_alex_table_factory")
-        v = VizMarkerPublisher(world, node)
-        time.sleep(600)
 
     def test_container_factory(self):
         factory = ContainerFactory(name=PrefixedName("container"))

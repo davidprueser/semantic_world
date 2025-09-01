@@ -986,8 +986,6 @@ class IkeaDrawerFactory(ViewFactory[Drawer]):
         2. Create the container and handle using their respective factories.
         3. Add the handle to the drawer body at the correct position.
         """
-        # Handle ausschneiden und dann einen teil als handle wieder hinzufuegen indem man handle setzt und dann sagt alles darueber weg
-        # Danach eine Box erstellen, die man hinter frontseite packt und dann container event - box nimmt
         self.handle_factory.scale = Scale(self.container_factory.wall_thickness / 2,
                                           self.container_factory.scale.y / 2,
                                           self.handle_factory.scale.z)
@@ -1020,6 +1018,7 @@ class IkeaDrawerFactory(ViewFactory[Drawer]):
         """
         container_event = self.container_factory.create_container_event()
         container_event = self._remove_graspable_part_from_container(container_event)
+        container_event = self._remove_top_outer_boundary_from_container(container_event)
 
         bounding_box_collection = BoundingBoxCollection.from_event(body, container_event)
 
@@ -1038,6 +1037,31 @@ class IkeaDrawerFactory(ViewFactory[Drawer]):
                           self.container_factory.scale.x / 2 + self.container_factory.wall_thickness / 2)
         cutout_y = closed(-self.container_factory.scale.y / 4, self.container_factory.scale.y / 4)
         cutout_z = closed(self.container_factory.scale.z / 3, self.container_factory.scale.z / 2)
+
+        cutout_event = SimpleEvent(
+            {
+                SpatialVariables.x.value: cutout_x,
+                SpatialVariables.y.value: cutout_y,
+                SpatialVariables.z.value: cutout_z
+            }
+        ).as_composite_set()
+
+        container_event -= cutout_event
+        return container_event
+
+    def _remove_top_outer_boundary_from_container(self, container_event: Event) -> Event:
+        """
+        Remove the top outer boundary of the drawer to create an open top.
+        This is done by cutting out the top 15% of the height relative to the total container scale.
+
+        :param container_event: The event representing the container.
+        :return: The modified container event with the top outer boundary removed.
+        """
+        # cutout x: exclude the front wall
+        cutout_x = closed(-self.container_factory.scale.x / 2, self.container_factory.scale.x / 2 - self.container_factory.wall_thickness / 2)
+        cutout_y = closed(-self.container_factory.scale.y / 2, self.container_factory.scale.y / 2)
+        # cutout z: remove the top 15% of the height relative to the total container scale
+        cutout_z = closed(self.container_factory.scale.z / 2 - (self.container_factory.scale.z / 13.33), self.container_factory.scale.z / 2)
 
         cutout_event = SimpleEvent(
             {
@@ -1069,184 +1093,6 @@ class IkeaDrawerFactory(ViewFactory[Drawer]):
         )
 
         drawer_world.merge_world(handle_world, connection_drawer_T_handle)
-
-
-        # def create(self) -> World:
-        #     handle_event = self.create_handle_event()
-        #
-        #     handle = Body(name=self.name)
-        #     collision = BoundingBoxCollection.from_simple_event(handle, handle_event).as_shapes()
-        #     handle.collision = collision
-        #     handle.visual = collision
-        #
-        #     handle_view = Handle(name=self.name, body=handle)
-        #
-        #     world = World()
-        #     world.add_kinematic_structure_entity(handle)
-        #     world.add_view(handle_view)
-        #     return world
-        #
-        # def create_handle_event(self) -> SimpleEvent:
-        #     x_interval = closed(-self.scale.x / 2, self.scale.x / 2)
-        #     y_interval = closed(-self.scale.y / 2, self.scale.y / 2)
-        #     z_interval = closed(0, self.scale.z)
-        #
-        #     handle_event = SimpleEvent(
-        #         {
-        #             SpatialVariables.x.value: x_interval,
-        #             SpatialVariables.y.value: y_interval,
-        #             SpatialVariables.z.value: z_interval,
-        #         }
-        #     )
-        #     return handle_event
-        #
-        # container_event -= handle_event
-
-
-# @dataclass
-# class IKEAAlexStorage(ViewFactory[Dresser]):
-#     """
-#     Factory for an IKEA ALEX storage unit with a single door that can open.
-#     Returns a Dresser view with a Container and one Door.
-#     """
-#
-#     name: PrefixedName
-#     scale: Scale = field(default_factory=lambda: Scale(0.58, 0.36, 0.70))
-#     wall_thickness: float = 0.02
-#
-#     def create(self) -> World:
-#         # CONTAINER
-#         container_factory = ContainerFactory(
-#             name=self.name,
-#             scale=self.scale,
-#             wall_thickness=self.wall_thickness,
-#             direction=Direction.Y,
-#         )
-#         world = container_factory.create()
-#         container_view: Container = world.get_views_by_type(Container)[0]
-#
-#         # DOOR
-#         handle_factory = HandleFactory(
-#             name=PrefixedName(f"{self.name.name}_handle", self.name.prefix)
-#         )
-#         door_factory = DoorFactory(
-#             name=PrefixedName(f"{self.name.name}_door", self.name.prefix),
-#             handle_factory=handle_factory,
-#             handle_direction=Direction.NEGATIVE_X,
-#             scale=Scale(self.scale.x, self.wall_thickness, self.scale.z),
-#         )
-#         parent_T_door = TransformationMatrix.from_point_rotation_matrix(
-#             Point3(self.scale.x / 2, self.scale.y / 2, self.scale.z / 2)
-#         )
-#         add_door_to_world(
-#             door_factory=door_factory,
-#             parent_T_door=parent_T_door,
-#             parent_world=world,
-#         )
-#         doors = world.get_views_by_type(Door)
-#
-#         dresser_view = Dresser(
-#             name=self.name,
-#             container=container_view,
-#             drawers=[],
-#             doors=doors,
-#         )
-#         world.add_view(dresser_view, exists_ok=True)
-#         return world
-#
-#
-# @dataclass
-# class IKEALangkaptenAlexTableFactory(ViewFactory[Table]):
-#     """
-#     Factory for creating an IKEA-style table setup consisting of two cabinet units (foundations)
-#     and a tabletop on top. The world root is the tabletop; the two units are merged under the top.
-#     """
-#
-#     name: PrefixedName
-#     """
-#     The name of the table (applied to the tabletop body and Table view).
-#     """
-#
-#     top_scale: Scale = field(default_factory=lambda: Scale(1.4, 0.6, 0.03))
-#     """
-#     The size of the tabletop (x=depth, y=width, z=thickness).
-#     """
-#
-#     unit_factories: List[ViewFactory] = field(default_factory=list, hash=False)
-#     """
-#     Exactly two unit factories are expected. If empty, one IKEAAlexDrawerFactory and one IKEAAlexStorage will be created.
-#     """
-#
-#     def create(self) -> World:
-#         """
-#         Return a world representing the IKEA LAGKAPTEN + ALEX table: a tabletop body as root, with
-#         two units placed underneath as fixed children.
-#         """
-#         factories: List[ViewFactory] = list(self.unit_factories)
-#         if len(factories) == 0:
-#             unit_scale = Scale(self.top_scale.x / 3, self.top_scale.y - 0.1, 0.70)
-#             factories = [
-#                 IKEAAlexDrawerFactory(name=PrefixedName("alex_drawers", self.name.prefix), scale=unit_scale),
-#                 IKEAAlexStorage(name=PrefixedName("alex_storage", self.name.prefix), scale=unit_scale),
-#             ]
-#         assert len(factories) == 2
-#
-#         # Create tabletop body as world root
-#         top_event = event_from_scale(self.top_scale).as_composite_set()
-#         top_body = Body(name=self.name)
-#         top_collision = BoundingBoxCollection.from_event(top_event).as_shapes(top_body)
-#         top_body.collision = top_collision
-#         top_body.visual = top_collision
-#
-#         world = World()
-#         world.add_body(top_body)
-#
-#         # Create and merge unit worlds beneath the tabletop
-#         for idx, factory in enumerate(factories):
-#             unit_world = factory.create()
-#             unit_root = unit_world.root
-#
-#             # Determine unit dimensions from its bounding box relative to itself
-#             unit_event = unit_root.as_bounding_box_collection(unit_root).event
-#             # Compute unit extents using BoundingBoxCollection to avoid direct Interval attribute access
-#             unit_bcs = BoundingBoxCollection.from_event(unit_event)
-#             if len(unit_bcs.bounding_boxes) == 0:
-#                 # Fallback to tabletop-supported default if no boxes present
-#                 unit_x = self.top_scale.x / 3
-#                 unit_y = self.top_scale.y / 3
-#                 unit_z = self.top_scale.z
-#             else:
-#                 min_x = min(bb.min_x for bb in unit_bcs.bounding_boxes)
-#                 max_x = max(bb.max_x for bb in unit_bcs.bounding_boxes)
-#                 min_y = min(bb.min_y for bb in unit_bcs.bounding_boxes)
-#                 max_y = max(bb.max_y for bb in unit_bcs.bounding_boxes)
-#                 min_z = min(bb.min_z for bb in unit_bcs.bounding_boxes)
-#                 max_z = max(bb.max_z for bb in unit_bcs.bounding_boxes)
-#                 unit_x = max_x - min_x
-#                 unit_y = max_y - min_y
-#                 unit_z = max_z - min_z
-#
-#             # Vertical placement: directly under the tabletop
-#             z = -((self.top_scale.z / 2) + (unit_z / 2))
-#             # Horizontal placement along X near ends; centered in Y
-#             x_edge_offset = (self.top_scale.x / 2) - (unit_x / 2)
-#             x = -x_edge_offset if idx == 0 else x_edge_offset
-#             y = 0.0
-#
-#             transform = TransformationMatrix.from_xyz_rpy(x, y, z, 0, 0, 0)
-#             connection = FixedConnection(
-#                 parent=world.root,
-#                 child=unit_world.root,
-#                 origin_expression=transform,
-#             )
-#             world.merge_world(unit_world, connection)
-#
-#         # Add the Table view, referencing the tabletop body
-#         table_view = Table(top=top_body)
-#         world.add_view(table_view)
-#
-#         return world
-
 
 
 def add_door_to_world(
