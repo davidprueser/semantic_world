@@ -2,15 +2,15 @@ import os
 import unittest
 
 from semantic_world.adapters.mesh import STLParser
-from semantic_world.geometry import Mesh
+from semantic_world.world_description.geometry import FileMesh
 
 
 class STLAdapterTestCase(unittest.TestCase):
 
     def setUp(self):
         # Set up any necessary resources or state before each test
-        self.milk_path = os.path.join(__file__, "..", "resources", "stl", 'milk.stl')
-        self.cup = os.path.join(__file__, "..", "resources", "stl", 'jeroen_cup.stl')
+        self.milk_path = os.path.join(__file__, "..", "resources", "stl", "milk.stl")
+        self.cup = os.path.join(__file__, "..", "resources", "stl", "jeroen_cup.stl")
 
     def test_stl_parsing_construct(self):
         stl_parser = STLParser(self.milk_path)
@@ -24,7 +24,9 @@ class STLAdapterTestCase(unittest.TestCase):
         self.assertEqual(len(world.kinematic_structure_entities), 1)
         self.assertEqual(len(world.kinematic_structure_entities[0].collision), 1)
         self.assertEqual(len(world.kinematic_structure_entities[0].visual), 1)
-        self.assertEqual(Mesh, type(world.kinematic_structure_entities[0].collision[0]))
+        self.assertEqual(
+            FileMesh, type(world.kinematic_structure_entities[0].collision[0])
+        )
 
     def test_parse_and_merge(self):
         milk_world = STLParser(self.milk_path).parse()

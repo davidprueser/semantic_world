@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import os
+from contextlib import suppress
 from copy import deepcopy
 from functools import lru_cache, wraps
-from typing import Any, Tuple
+from typing_extensions import Any, Tuple, Iterable
 from xml.etree import ElementTree as ET
+
+from sqlalchemy import Engine, inspect, text, MetaData
 
 
 class IDGenerator:
@@ -63,7 +66,9 @@ class suppress_stdout_stderr(object):
             os.close(fd)
 
 
-def hacky_urdf_parser_fix(urdf: str, blacklist: Tuple[str] = ('transmission', 'gazebo')) -> str:
+def hacky_urdf_parser_fix(
+    urdf: str, blacklist: Tuple[str] = ("transmission", "gazebo")
+) -> str:
     # Parse input string
     root = ET.fromstring(urdf)
 
@@ -76,7 +81,7 @@ def hacky_urdf_parser_fix(urdf: str, blacklist: Tuple[str] = ('transmission', 'g
                 parent.remove(elem)
 
     # Turn back to string
-    return ET.tostring(root, encoding='unicode')
+    return ET.tostring(root, encoding="unicode")
 
 
 def robot_name_from_urdf_string(urdf_string: str) -> str:
@@ -104,3 +109,47 @@ def copy_lru_cache(maxsize=None, typed=False):
         return wrapper
 
     return decorator
+
+
+def bpy_installed() -> bool:
+    try:
+        import bpy
+
+        return True
+    except ImportError:
+        return False
+
+
+def rclpy_installed() -> bool:
+    try:
+        import rclpy
+
+        return True
+    except ImportError:
+        return False
+
+
+def get_semantic_world_directory_root(file_path: str) -> str:
+    """
+    Get the root directory of the semantic world given a file path that lays in it.
+
+    :param file_path: Path to the file
+    :return: Root directory of the semantic world
+    """
+    if not os.path.exists(file_path):
+        raise ValueError(f"File {file_path} does not exist")
+
+    current_dir = os.path.abspath(file_path)
+
+    # Loop until we reach the root directory (cross-platform)
+    while True:
+        if os.path.exists(os.path.join(current_dir, "pyproject.toml")):
+            return current_dir
+        parent_dir = os.path.dirname(current_dir)
+        if parent_dir == current_dir:
+            break
+        current_dir = parent_dir
+
+    raise ValueError(
+        f"Could not find pyproject.toml in any parent directory of {file_path}"
+    )

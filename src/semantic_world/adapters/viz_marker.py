@@ -5,6 +5,7 @@ import time
 import numpy as np
 
 from .. import logger
+from ..callbacks.callback import StateChangeCallback
 
 try:
     from builtin_interfaces.msg import Duration
@@ -13,20 +14,36 @@ try:
     from visualization_msgs.msg import Marker, MarkerArray
     from geometry_msgs.msg import Vector3, Point, PoseStamped, Quaternion, Pose
 except ImportError as e:
-    logger.warning(f"Could not import ros messages, viz marker will not be available: {e}")
+    logger.warning(
+        f"Could not import ros messages, viz marker will not be available: {e}"
+    )
 
 from scipy.spatial.transform import Rotation
 
-from ..geometry import Mesh, Box, Sphere, Cylinder, Primitive, TriangleMesh
+from ..world_description.geometry import (
+    FileMesh,
+    Box,
+    Sphere,
+    Cylinder,
+    Primitive,
+    TriangleMesh,
+)
 from ..world import World
 
 
-class VizMarkerPublisher:
+class VizMarkerPublisher(StateChangeCallback):
     """
     Publishes an Array of visualization marker which represent the situation in the World
     """
 
-    def __init__(self, world: World, node, topic_name="/semworld/viz_marker", interval=0.1, reference_frame="map"):
+    def __init__(
+        self,
+        world: World,
+        node,
+        topic_name="/semworld/viz_marker",
+        interval=0.1,
+        reference_frame="map",
+    ):
         """
         The Publisher creates an Array of Visualization marker with a Marker for each body in the World and publishes
         it to the given topic name at a fixed interval. The publisher automatically stops publishing when the process
@@ -45,20 +62,12 @@ class VizMarkerPublisher:
 
         self.pub = self.node.create_publisher(MarkerArray, topic_name, 10)
 
-        self.thread = threading.Thread(target=self._publish, name="VizMarkerPublisher")
-        self.kill_event = threading.Event()
-
-        self.thread.start()
-        atexit.register(self._stop_publishing)
-
-    def _publish(self) -> None:
+    def notify(self):
         """
-        Constantly publishes the Marker Array. To the given topic name at a fixed rate.
+        Publishes the Marker Array on world changes.
         """
-        while not self.kill_event.is_set():
-            marker_array = self._make_marker_array()
-            self.pub.publish(marker_array)
-            time.sleep(self.interval)
+        marker_array = self._make_marker_array()
+        self.pub.publish(marker_array)
 
     def _make_marker_array(self) -> MarkerArray:
         """
@@ -69,48 +78,74 @@ class VizMarkerPublisher:
         :return: An Array of Visualization Marker
         """
         marker_array = MarkerArray()
-        for body in self.world.kinematic_structure_entities:
+        for body in self.world.bodies:
             for i, collision in enumerate(body.collision):
                 msg = Marker()
                 msg.header.frame_id = self.reference_frame
                 msg.ns = body.name.name
                 msg.id = i
                 msg.action = Marker.ADD
-                msg.pose = self.transform_to_pose((self.world.compute_forward_kinematics(self.world.root, body) @ collision.origin).to_np())
-                msg.color = body.color if isinstance(body, Primitive) else ColorRGBA(r=1.0, g=1.0, b=1.0, a=1.0)
+                msg.pose = self.transform_to_pose(
+                    (
+                        self.world.compute_forward_kinematics(self.world.root, body)
+                        @ collision.origin
+                    ).to_np()
+                )
+                msg.color = (
+                    ColorRGBA(
+                        r=float(collision.color.R),
+                        g=float(collision.color.G),
+                        b=float(collision.color.B),
+                        a=float(collision.color.A),
+                    )
+                    if isinstance(collision, Primitive)
+                    else ColorRGBA(r=1.0, g=1.0, b=1.0, a=1.0)
+                )
                 msg.lifetime = Duration(sec=1)
 
-                if isinstance(collision, Mesh):
+                if isinstance(collision, FileMesh):
                     msg.type = Marker.MESH_RESOURCE
                     msg.mesh_resource = "file://" + collision.filename
-                    msg.scale = Vector3(x=float(collision.scale.x), y=float(collision.scale.y), z=float(collision.scale.z))
+                    msg.scale = Vector3(
+                        x=float(collision.scale.x),
+                        y=float(collision.scale.y),
+                        z=float(collision.scale.z),
+                    )
                     msg.mesh_use_embedded_materials = True
                 elif isinstance(collision, TriangleMesh):
                     f = collision.file
                     msg.type = Marker.MESH_RESOURCE
                     msg.mesh_resource = "file://" + f.name
-                    msg.scale = Vector3(x=float(collision.scale.x), y=float(collision.scale.y),
-                                        z=float(collision.scale.z))
+                    msg.scale = Vector3(
+                        x=float(collision.scale.x),
+                        y=float(collision.scale.y),
+                        z=float(collision.scale.z),
+                    )
                     msg.mesh_use_embedded_materials = True
                 elif isinstance(collision, Cylinder):
                     msg.type = Marker.CYLINDER
-                    msg.scale = Vector3(x=float(collision.width), y=float(collision.width), z=float(collision.height))
+                    msg.scale = Vector3(
+                        x=float(collision.width),
+                        y=float(collision.width),
+                        z=float(collision.height),
+                    )
                 elif isinstance(collision, Box):
                     msg.type = Marker.CUBE
-                    msg.scale = Vector3(x=float(collision.scale.x), y=float(collision.scale.y), z=float(collision.scale.z))
+                    msg.scale = Vector3(
+                        x=float(collision.scale.x),
+                        y=float(collision.scale.y),
+                        z=float(collision.scale.z),
+                    )
                 elif isinstance(collision, Sphere):
                     msg.type = Marker.SPHERE
-                    msg.scale = Vector3(x=float(collision.radius * 2), y=float(collision.radius * 2), z=float(collision.radius * 2))
+                    msg.scale = Vector3(
+                        x=float(collision.radius * 2),
+                        y=float(collision.radius * 2),
+                        z=float(collision.radius * 2),
+                    )
 
                 marker_array.markers.append(msg)
         return marker_array
-
-    def _stop_publishing(self) -> None:
-        """
-        Stops the publishing of the Visualization Marker update by setting the kill event and collecting the thread.
-        """
-        self.kill_event.set()
-        self.thread.join()
 
     @staticmethod
     def transform_to_pose(transform: np.ndarray) -> Pose:
@@ -122,5 +157,12 @@ class VizMarkerPublisher:
         """
         pose = Pose()
         pose.position = Point(**dict(zip(["x", "y", "z"], transform[:3, 3])))
-        pose.orientation = Quaternion(**dict(zip(["x", "y", "z", "w"], Rotation.from_matrix(transform[:3, :3]).as_quat())))
+        pose.orientation = Quaternion(
+            **dict(
+                zip(
+                    ["x", "y", "z", "w"],
+                    Rotation.from_matrix(transform[:3, :3]).as_quat(),
+                )
+            )
+        )
         return pose

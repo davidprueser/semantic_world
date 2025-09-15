@@ -35,11 +35,11 @@ You can read more about GCS [here](https://arxiv.org/abs/2101.11565).
 Let's get hands on! First, we need to create a world that makes navigation non-trivial.
 
 ```{code-cell} ipython2
-from semantic_world.geometry import Box, Scale, Color
-from semantic_world.prefixed_name import PrefixedName
+from semantic_world.world_description.geometry import Box, Scale, Color
+from semantic_world.world_description.world_entity import Body
+from semantic_world.datastructures.prefixed_name import PrefixedName
 from semantic_world.spatial_types import TransformationMatrix
 from semantic_world.world import World
-from semantic_world.world_entity import Body
 
 box_world = World()
 
@@ -57,12 +57,12 @@ be unable to fly by constraining the z-axis. Otherwise, he would get the idea to
 
 ```{code-cell} ipython2
 from random_events.interval import SimpleInterval
-from semantic_world.graph_of_convex_sets import GraphOfConvexSets
-from semantic_world.geometry import BoundingBox
+from semantic_world.world_description.graph_of_convex_sets import GraphOfConvexSets
+from semantic_world.world_description.geometry import BoundingBox
 
 search_space = BoundingBox(min_x=-1, max_x=1,
                            min_y=-1, max_y=1,
-                           min_z=0.1, max_z=0.2, reference_frame=box_world.root).as_collection()
+                           min_z=0.1, max_z=0.2, origin=TransformationMatrix(reference_frame=box_world.root)).as_collection()
                            
 gcs = GraphOfConvexSets.free_space_from_world(box_world, search_space=search_space)
 ```
@@ -115,7 +115,7 @@ world = apartment_parser.parse()
 
 search_space = BoundingBox(min_x=-2, max_x=2,
                            min_y=-2, max_y=2,
-                           min_z=0., max_z=2, reference_frame=world.root).as_collection()
+                           min_z=0., max_z=2, origin=TransformationMatrix(reference_frame=world.root)).as_collection()
 gcs = GraphOfConvexSets.free_space_from_world(world, search_space=search_space)
 ```
 
