@@ -1,303 +1,768 @@
-from dataclasses import dataclass, field
-from typing import List, Optional
+from __future__ import annotations
 
-from semantic_world.world_description.world_entity import View
-# Reuse existing core views where applicable
-from semantic_world.views.views import (
-    Container as BaseContainer,
-    Handle as BaseHandle,
-    Drawer as BaseDrawer,
-    Dresser as BaseDresser,
-    Table as BaseTable,
+from abc import abstractmethod
+from dataclasses import dataclass, field
+from functools import cached_property
+
+from typing_extensions import List, Self
+from typing import ClassVar
+import re
+
+from ...world import World
+
+# Reuse the common world/view primitives so ProcTHOR views integrate seamlessly.
+from ...world_description.world_entity import View, Body, Region
+from ...views.views import (
+    Handle,
+    Drawer,
+    Door,
+    Container,
+    Furniture,
+    SupportingSurface,
+    Table,
 )
 
-# -------------------------------
-# Base classes
-# -------------------------------
-# Removed duplicate local View definition to avoid shadowing the imported View.
-# The imported View provides custom hash/equality semantics; subclasses should use eq=False.
 
-# -------------------------------
+# -----------------------------
+# Base categories for household objects
+# -----------------------------
+
+
+@dataclass(eq=False)
+class HouseholdObject(View):
+    """A very general household object with a single body.
+
+    Each subclass can declare regex patterns in name_pattern to identify whether a
+    given prefixed name (from ProcTHOR/RoboTHOR) should be mapped to this view.
+    Use HouseholdObject.matches_name(name) to test membership.
+    """
+
+    body: Body
+
+    # Class-level regex patterns (strings) for name matching. Subclasses can override.
+    name_pattern: ClassVar[tuple[str, ...]] = tuple()
+    _compiled_name_pattern: ClassVar[tuple[re.Pattern, ...]] = tuple()
+
+    @classmethod
+    def _get_compiled_patterns(cls) -> tuple[re.Pattern, ...]:
+        # Lazy-compile for each subclass
+        if not cls._compiled_name_pattern:
+            cls._compiled_name_pattern = tuple(
+                re.compile(p) for p in getattr(cls, "name_pattern", tuple())
+            )
+        return cls._compiled_name_pattern
+
+    @classmethod
+    def matches_name(cls, name: str) -> bool:
+        """Return True if the provided name matches any of the class patterns."""
+        if not getattr(cls, "name_pattern", tuple()):
+            return False
+        return any(p.fullmatch(name) is not None for p in cls._get_compiled_patterns())
+
+    @classmethod
+    @abstractmethod
+    def from_world(cls, world: World) -> Self:
+        """
+        Creates an instance of the class from a given `world` parameter.
+
+        This abstract method must be implemented by any concrete subclass. It is used
+        to generate an object of the class based on the provided `World` instance.
+
+        :param world: The `World` instance used to create the object.
+        :return: A class instance created using the `World` instance.
+        """
+        raise NotImplementedError
+
+
+@dataclass(eq=False)
+class Appliance(HouseholdObject):
+    """Large or small powered appliances (e.g., Microwave, Toaster)."""
+
+    ...
+
+
+@dataclass(eq=False)
+class Fixture(HouseholdObject):
+    """Fixed home fixtures (e.g., Sink, Faucet, LightSwitch)."""
+
+    ...
+
+
+@dataclass(eq=False)
+class Utensil(HouseholdObject):
+    """Hand utensils and tools (e.g., Knife, Spoon, Spatula)."""
+
+    ...
+
+
+@dataclass(eq=False)
+class Cookware(HouseholdObject):
+    """Pots, pans, and similar cookware."""
+
+    ...
+
+
+@dataclass(eq=False)
+class Dishware(HouseholdObject):
+    """Dishes and drinkware (e.g., Bowl, Plate, Mug)."""
+
+    ...
+
+
+@dataclass(eq=False)
+class ElectronicDevice(HouseholdObject):
+    """Consumer electronics (e.g., Television, RemoteControl, Laptop)."""
+
+    ...
+
+
+@dataclass(eq=False)
+class CleaningSupply(HouseholdObject):
+    """Cleaning-related objects (e.g., SoapBottle, Sponge)."""
+
+    ...
+
+
+@dataclass(eq=False)
+class Food(HouseholdObject):
+    """Edible items (e.g., Apple, Bread, Tomato). Variants map to these base classes."""
+
+    ...
+
+
+# -----------------------------
+# Concrete ProcTHOR-relevant object classes
+# (Keep them general. Do not add subclasses for mere variants.)
+# -----------------------------
+
+
 # Fixtures
-# -------------------------------
 @dataclass(eq=False)
-class FaucetKnob(View):
-    side: Optional[str] = None  # left / right
+class Sink(Fixture):
+    name_pattern: ClassVar[tuple[str, ...]] = (r"^(?:robothor_)?sink(?:[_a-z0-9].*)?$",)
+    ...
+
 
 @dataclass(eq=False)
-class Faucet(View):
-    knobs: List[FaucetKnob] = field(default_factory=list)
+class Faucet(Fixture):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?(?:faucet|sink_faucet)(?:[_a-z0-9].*)?$",
+    )
+    ...
+
 
 @dataclass(eq=False)
-class Sink(View):
-    faucet: Optional[Faucet] = None
+class Knob(Fixture):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?(?:knob|sink_faucet_knob|light_switch_dial)(?:[_a-z0-9].*)?$",
+    )
+    ...
+
 
 @dataclass(eq=False)
-class LightSwitchDial(View):
-    variant: Optional[str] = None  # a/b/c/d
+class LightSwitch(Fixture):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?light_switch(?:$|_(?!dial).*)$",
+    )
+    ...
+
 
 @dataclass(eq=False)
-class LightSwitch(View):
-    dials: List[LightSwitchDial] = field(default_factory=list)
+class Outlet(Fixture):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?outlet(?:[_a-z0-9].*)?$",
+    )
+    ...
+
 
 @dataclass(eq=False)
-class ToiletPaperHanger(View):
-    pass
+class Toilet(Fixture):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?toilet(?!_paper)(?:[_a-z0-9].*)?$",
+    )
+    ...
 
-# -------------------------------
-# Containers
-# -------------------------------
-# Extracted common container superclass to avoid duplication of volume/liquid_volume fields.
-# Refactor: Reuse core Container, add only additional optional fields here.
-@dataclass(eq=False)
-class Container(BaseContainer):
-    volume: Optional["Volume"] = None
-    liquid_volume: Optional["Volume"] = None
 
 @dataclass(eq=False)
-class Volume(View):
-    capacity: Optional[float] = None  # could be ml
+class Bathtub(Fixture):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?bathtub(?:[_a-z0-9].*)?$",
+    )
+    ...
+
 
 @dataclass(eq=False)
-class Cap(View):
-    shape: Optional[str] = None  # square / circle
+class Shower(Fixture):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?shower(?:[_a-z0-9].*)?$",
+    )
+    ...
+
 
 @dataclass(eq=False)
-class Bottle(Container):
-    cap: Optional[Cap] = None
-    # volume and (optional) liquid_volume inherited from Container
+class Hanger(Fixture):  # e.g., ToiletPaperHanger
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?(?:hanger|toilet_paper_hanger)(?:[_a-z0-9].*)?$",
+    )
+    ...
+
+
+# Furniture and supporting surfaces
+@dataclass(eq=False)
+class Chair(Furniture):
+    body: Body
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?chair(?:[_a-z0-9].*)?$",
+    )
+
 
 @dataclass(eq=False)
-class SoapBottle(Bottle):
-    pass
+class Sofa(Furniture):
+    body: Body
+    name_pattern: ClassVar[tuple[str, ...]] = (r"^(?:robothor_)?sofa(?:[_a-z0-9].*)?$",)
+
 
 @dataclass(eq=False)
-class WineBottle(Bottle):
-    cork: Optional[View] = None
+class Bed(Furniture):
+    body: Body
+    name_pattern: ClassVar[tuple[str, ...]] = (r"^(?:robothor_)?bed(?:[_a-z0-9].*)?$",)
+
 
 @dataclass(eq=False)
-class Cup(Container):
-    # uses 'volume' from Container
-    pass
+class Desk(Furniture):
+    top: Body
+    name_pattern: ClassVar[tuple[str, ...]] = (r"^(?:robothor_)?desk(?:[_a-z0-9].*)?$",)
+
 
 @dataclass(eq=False)
-class Mug(Container):
-    # typically uses 'liquid_volume' from Container
-    pass
+class Shelf(Furniture):
+    shelves: List[Body] = field(default_factory=list, hash=False)
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?shelf(?:[_a-z0-9].*)?$",
+    )
+
 
 @dataclass(eq=False)
-class Bowl(Container):
-    # uses 'volume' from Container
-    pass
+class Bookshelf(Shelf):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?bookshelf(?:[_a-z0-9].*)?$",
+    )
+    ...
+
 
 @dataclass(eq=False)
-class Plate(View):
-    pass
+class CounterTop(SupportingSurface):
+    region: Region
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?(?:countertop|counter_top|counter)(?:[_a-z0-9].*)?$",
+    )
 
-@dataclass(eq=False)
-class Pot(Container):
-    lids: List["PotLid"] = field(default_factory=list)
 
-# Extracted a common Lid superclass to unify lid-like entities.
-@dataclass(eq=False)
-class Lid(View):
-    pass
-
-@dataclass(eq=False)
-class PotLid(Lid):
-    pass
-
-@dataclass(eq=False)
-class Pan(View):
-    lids: List["PanLid"] = field(default_factory=list)
-
-@dataclass(eq=False)
-class PanLid(Lid):
-    pass
-
-# -------------------------------
 # Appliances
-# -------------------------------
 @dataclass(eq=False)
-class OvenDrawer(View): pass
-@dataclass(eq=False)
-class OvenDoor(View): pass
-@dataclass(eq=False)
-class Oven(View):
-    drawer: Optional[OvenDrawer] = None
-    door: Optional[OvenDoor] = None
+class Microwave(Appliance):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?microwave(?:[_a-z0-9].*)?$",
+    )
+    ...
+
 
 @dataclass(eq=False)
-class ToasterLever(View): pass
-@dataclass(eq=False)
-class Toaster(View):
-    levers: List[ToasterLever] = field(default_factory=list)
+class Oven(Appliance):
+    name_pattern: ClassVar[tuple[str, ...]] = (r"^(?:robothor_)?oven(?:[_a-z0-9].*)?$",)
+    ...
+
 
 @dataclass(eq=False)
-class Kettle(Container):
-    # uses 'volume' and optionally 'liquid_volume' from Container
-    lid: Optional[View] = None
+class Stove(Appliance):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?stove(?:[_a-z0-9].*)?$",
+    )
+    ...
+
 
 @dataclass(eq=False)
-class Refrigerator(View):
-    body: Optional[View] = None
-    main_door: Optional[View] = None
-    freezer_door: Optional[View] = None
-    drawers: List[View] = field(default_factory=list)
+class StoveBurner(Appliance):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?(?:stove_)?burner(?:[_a-z0-9].*)?$",
+    )
+    ...
 
-# -------------------------------
-# Food
-# -------------------------------
-@dataclass(eq=False)
-class Slice(View): pass
-@dataclass(eq=False)
-class Mesh(View): pass
 
 @dataclass(eq=False)
-class Fruit(View):
-    slices: List[Slice] = field(default_factory=list)
-    mesh: Optional[Mesh] = None
+class StoveKnob(Fixture):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?stove_knob(?:[_a-z0-9].*)?$",
+    )
+    ...
+
 
 @dataclass(eq=False)
-class Apple(Fruit): pass
-@dataclass(eq=False)
-class Tomato(Fruit): pass
+class Toaster(Appliance):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?toaster(?:[_a-z0-9].*)?$",
+    )
+    ...
+
 
 @dataclass(eq=False)
-class Vegetable(View):
-    slices: List[Slice] = field(default_factory=list)
+class CoffeeMachine(Appliance):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?(?:coffee_machine|coffee_maker)(?:[_a-z0-9].*)?$",
+    )
+    ...
+
 
 @dataclass(eq=False)
-class Lettuce(Vegetable): pass
-@dataclass(eq=False)
-class Potato(Vegetable): pass
+class Blender(Appliance):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?blender(?:[_a-z0-9].*)?$",
+    )
+    ...
+
 
 @dataclass(eq=False)
-class EggShell(View): pass
-@dataclass(eq=False)
-class Egg(View):
-    shells: List[EggShell] = field(default_factory=list)
+class Kettle(Appliance):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?(?:kettle|tea_kettle)(?:[_a-z0-9].*)?$",
+    )
+    ...
+
 
 @dataclass(eq=False)
-class FriedEgg(Egg): pass
-@dataclass(eq=False)
-class Omelette(Egg): pass
+class Dishwasher(Appliance):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?dishwasher(?:[_a-z0-9].*)?$",
+    )
+    ...
+
 
 @dataclass(eq=False)
-class BreadSlice(View): pass
-@dataclass(eq=False)
-class Bread(View):
-    slices: List[BreadSlice] = field(default_factory=list)
+class WashingMachine(Appliance):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?washing_machine(?:[_a-z0-9].*)?$",
+    )
+    ...
+
 
 @dataclass(eq=False)
-class WhiteBread(Bread): pass
-@dataclass(eq=False)
-class GrainBread(Bread): pass
-@dataclass(eq=False)
-class HoneyBread(Bread): pass
-@dataclass(eq=False)
-class LoafBread(Bread): pass
-@dataclass(eq=False)
-class BumpyBread(Bread): pass
+class Dryer(Appliance):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?dryer(?:[_a-z0-9].*)?$",
+    )
+    ...
 
-# -------------------------------
-# Furniture
-# -------------------------------
-# Refactor: Reuse core Handle/Drawer/Dresser types for compatibility with the rest of the system.
-# They inherit core semantics (e.g., required fields) while keeping local type names.
-# ... existing code ...
+
+# Dishware / containers
 @dataclass(eq=False)
-class Handle(BaseHandle):
-    pass
+class Bottle(Dishware):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?(?:bottle|water_bottle|wine_bottle)(?:[_a-z0-9].*)?$",
+    )
+    ...
+
 
 @dataclass(eq=False)
-class Drawer(BaseDrawer):
-    pass
+class Bowl(Dishware):
+    name_pattern: ClassVar[tuple[str, ...]] = (r"^(?:robothor_)?bowl(?:[_a-z0-9].*)?$",)
+    ...
+
 
 @dataclass(eq=False)
-class Dresser(BaseDresser):
-    # Optionally keep handles list if used elsewhere; not required by the base Dresser.
-    handles: List[Handle] = field(default_factory=list)
-# ... existing code ...
+class Plate(Dishware):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?plate(?:[_a-z0-9].*)?$",
+    )
+    ...
+
 
 @dataclass(eq=False)
-class Bed(View):
-    mattress: Optional[View] = None
-    bedsheet: Optional[View] = None
-    drawers: List[Drawer] = field(default_factory=list)
+class Cup(Dishware):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?(?:cup|coffee_cup)(?:[_a-z0-9].*)?$",
+    )
+    ...
 
-# Refactor: Reuse core Table for specializations to avoid redefining it.
-# Subclasses still require a valid 'top' Body when instantiated, as per the core Table API.
-@dataclass(eq=False)
-class Table(BaseTable): pass
-@dataclass(eq=False)
-class CoffeeTable(Table): pass
-@dataclass(eq=False)
-class DiningTable(Table): pass
-@dataclass(eq=False)
-class SideTable(Table): pass
-@dataclass(eq=False)
-class Desk(Table): pass
 
 @dataclass(eq=False)
-class Seating(View): pass
-@dataclass(eq=False)
-class Chair(Seating): pass
-@dataclass(eq=False)
-class Armchair(Seating): pass
-@dataclass(eq=False)
-class Sofa(Seating): pass
-@dataclass(eq=False)
-class OfficeChair(Seating): pass
-@dataclass(eq=False)
-class Ottoman(Seating): pass
+class Mug(Dishware):
+    name_pattern: ClassVar[tuple[str, ...]] = (r"^(?:robothor_)?mug(?:[_a-z0-9].*)?$",)
+    ...
+
 
 @dataclass(eq=False)
-class ShelvingUnit(View): pass
-@dataclass(eq=False)
-class TVStand(View): pass
-@dataclass(eq=False)
-class WallPanel(View): pass
-@dataclass(eq=False)
-class WallDecor(View): pass
+class Glass(Dishware):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?(?:glass|cup_glass)(?:[_a-z0-9].*)?$",
+    )
+    ...
 
-# -------------------------------
-# Accessories
-# -------------------------------
-@dataclass(eq=False)
-class Book(View): pass
-@dataclass(eq=False)
-class Poster(View): pass
-@dataclass(eq=False)
-class Pen(View): pass
-@dataclass(eq=False)
-class Candle(View): pass
-@dataclass(eq=False)
-class Knife(View): pass
-@dataclass(eq=False)
-class Fork(View): pass
-@dataclass(eq=False)
-class Racquet(View): pass
-@dataclass(eq=False)
-class Laptop(View): pass
-@dataclass(eq=False)
-class Remote(View): pass
-@dataclass(eq=False)
-class Vase(View): pass
-@dataclass(eq=False)
-class AlarmClock(View): pass
-@dataclass(eq=False)
-class Lamp(View): pass
-@dataclass(eq=False)
-class HousePlant(View): pass
 
-# -------------------------------
-# Misc
-# -------------------------------
+# Cookware
 @dataclass(eq=False)
-class Drone(View):
-    body: Optional[View] = None
-    box: Optional[View] = None
+class Pot(Cookware):
+    name_pattern: ClassVar[tuple[str, ...]] = (r"^(?:robothor_)?pot(?:[_a-z0-9].*)?$",)
+    ...
+
 
 @dataclass(eq=False)
-class Prop(View): pass
+class Pan(Cookware):
+    name_pattern: ClassVar[tuple[str, ...]] = (r"^(?:robothor_)?pan(?:[_a-z0-9].*)?$",)
+    ...
+
+
+# Utensils / tools
+@dataclass(eq=False)
+class Knife(Utensil):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?knife(?:[_a-z0-9].*)?$",
+    )
+    ...
+
+
+@dataclass(eq=False)
+class Fork(Utensil):
+    name_pattern: ClassVar[tuple[str, ...]] = (r"^(?:robothor_)?fork(?:[_a-z0-9].*)?$",)
+    ...
+
+
+@dataclass(eq=False)
+class Spoon(Utensil):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?spoon(?:[_a-z0-9].*)?$",
+    )
+    ...
+
+
+@dataclass(eq=False)
+class Spatula(Utensil):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?spatula(?:[_a-z0-9].*)?$",
+    )
+    ...
+
+
+@dataclass(eq=False)
+class Ladle(Utensil):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?ladle(?:[_a-z0-9].*)?$",
+    )
+    ...
+
+
+@dataclass(eq=False)
+class Tongs(Utensil):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?tongs(?:[_a-z0-9].*)?$",
+    )
+    ...
+
+
+@dataclass(eq=False)
+class Brush(Utensil):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?(?:brush|scrub_brush)(?:[_a-z0-9].*)?$",
+    )
+    ...  # e.g., ScrubBrush
+
+
+# Electronics
+@dataclass(eq=False)
+class Television(ElectronicDevice):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?(?:television|tv)(?:[_a-z0-9].*)?$",
+    )
+    ...
+
+
+@dataclass(eq=False)
+class RemoteControl(ElectronicDevice):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?(?:remote|remote_control)(?:[_a-z0-9].*)?$",
+    )
+    ...
+
+
+@dataclass(eq=False)
+class Laptop(ElectronicDevice):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?laptop(?:[_a-z0-9].*)?$",
+    )
+    ...
+
+
+@dataclass(eq=False)
+class Phone(ElectronicDevice):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?(?:phone|cell_phone|smartphone)(?:[_a-z0-9].*)?$",
+    )
+    ...
+
+
+@dataclass(eq=False)
+class Tablet(ElectronicDevice):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?(?:tablet|ipad)(?:[_a-z0-9].*)?$",
+    )
+    ...
+
+
+# Lighting
+@dataclass(eq=False)
+class Lamp(HouseholdObject):
+    name_pattern: ClassVar[tuple[str, ...]] = (r"^(?:robothor_)?lamp(?:[_a-z0-9].*)?$",)
+    ...
+
+
+@dataclass(eq=False)
+class FloorLamp(Lamp):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?floor_lamp(?:[_a-z0-9].*)?$",
+    )
+    ...
+
+
+@dataclass(eq=False)
+class DeskLamp(Lamp):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?desk_lamp(?:[_a-z0-9].*)?$",
+    )
+    ...
+
+
+# Cleaning supplies and disposables
+@dataclass(eq=False)
+class SoapBottle(CleaningSupply):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?soap_bottle(?:[_a-z0-9].*)?$",
+    )
+    ...
+
+
+@dataclass(eq=False)
+class SoapBar(CleaningSupply):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?soap_bar(?:[_a-z0-9].*)?$",
+    )
+    ...
+
+
+@dataclass(eq=False)
+class SprayBottle(CleaningSupply):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?spray_bottle(?:[_a-z0-9].*)?$",
+    )
+    ...
+
+
+@dataclass(eq=False)
+class Sponge(CleaningSupply):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?sponge(?:[_a-z0-9].*)?$",
+    )
+    ...
+
+
+@dataclass(eq=False)
+class TissueBox(CleaningSupply):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?tissue_box(?:[_a-z0-9].*)?$",
+    )
+    ...
+
+
+@dataclass(eq=False)
+class PaperTowelRoll(CleaningSupply):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?paper_towel_roll(?:[_a-z0-9].*)?$",
+    )
+    ...
+
+
+@dataclass(eq=False)
+class ToiletPaper(CleaningSupply):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?toilet_paper(?:[_a-z0-9].*)?$",
+    )
+    ...
+
+
+@dataclass(eq=False)
+class GarbageCan(CleaningSupply):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?(?:garbage_can|trash_can|waste_bin)(?:[_a-z0-9].*)?$",
+    )
+    ...
+
+
+@dataclass(eq=False)
+class GarbageBag(CleaningSupply):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?(?:garbage_bag|trash_bag)(?:[_a-z0-9].*)?$",
+    )
+    ...
+
+
+# Decorative and others
+@dataclass(eq=False)
+class Vase(HouseholdObject):
+    name_pattern: ClassVar[tuple[str, ...]] = (r"^(?:robothor_)?vase(?:[_a-z0-9].*)?$",)
+    ...
+
+
+@dataclass(eq=False)
+class Book(HouseholdObject):
+    name_pattern: ClassVar[tuple[str, ...]] = (r"^(?:robothor_)?book(?:[_a-z0-9].*)?$",)
+    ...
+
+
+# Food examples (keep generic; variants map to these base classes)
+@dataclass(eq=False)
+class Apple(Food):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?apple(?:[_a-z0-9].*)?$",
+    )
+    ...
+
+
+@dataclass(eq=False)
+class Banana(Food):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?banana(?:[_a-z0-9].*)?$",
+    )
+    ...
+
+
+@dataclass(eq=False)
+class Bread(Food):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?bread(?:[_a-z0-9].*)?$",
+    )
+    ...
+
+
+@dataclass(eq=False)
+class Tomato(Food):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?tomato(?:[_a-z0-9].*)?$",
+    )
+    ...
+
+
+@dataclass(eq=False)
+class Potato(Food):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?potato(?:[_a-z0-9].*)?$",
+    )
+    ...
+
+
+@dataclass(eq=False)
+class Carrot(Food):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?carrot(?:[_a-z0-9].*)?$",
+    )
+    ...
+
+
+@dataclass(eq=False)
+class Onion(Food):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?onion(?:[_a-z0-9].*)?$",
+    )
+    ...
+
+
+@dataclass(eq=False)
+class Garlic(Food):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?garlic(?:[_a-z0-9].*)?$",
+    )
+    ...
+
+
+@dataclass(eq=False)
+class Lettuce(Food):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?lettuce(?:[_a-z0-9].*)?$",
+    )
+    ...
+
+
+@dataclass(eq=False)
+class Egg(Food):
+    name_pattern: ClassVar[tuple[str, ...]] = (r"^(?:robothor_)?egg(?:[_a-z0-9].*)?$",)
+    ...
+
+
+@dataclass(eq=False)
+class Cheese(Food):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?cheese(?:[_a-z0-9].*)?$",
+    )
+    ...
+
+
+@dataclass(eq=False)
+class Butter(Food):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?butter(?:[_a-z0-9].*)?$",
+    )
+    ...
+
+
+@dataclass(eq=False)
+class Milk(Food):
+    name_pattern: ClassVar[tuple[str, ...]] = (r"^(?:robothor_)?milk(?:[_a-z0-9].*)?$",)
+    ...
+
+
+@dataclass(eq=False)
+class Sugar(Food):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?sugar(?:[_a-z0-9].*)?$",
+    )
+    ...
+
+
+@dataclass(eq=False)
+class Salt(Food):
+    name_pattern: ClassVar[tuple[str, ...]] = (r"^(?:robothor_)?salt(?:[_a-z0-9].*)?$",)
+    ...
+
+
+@dataclass(eq=False)
+class Pepper(Food):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?pepper(?:[_a-z0-9].*)?$",
+    )
+    ...
+
+
+# -----------------------------
+# Simple aliases for variant-heavy ProcTHOR names
+# (No extra subclasses; just point variants to a general class.)
+# -----------------------------
+
+# Fixtures
+LightSwitchDial = Knob  # e.g., light_switch_dial_X
+FaucetKnob = Knob  # e.g., sink_faucet_knob_*
+
+# Containers/bottles
+WineBottle = Bottle  # e.g., wine_bottle_*
+
+# Cleaning / bottles
+DishSoap = SoapBottle  # generic alias if used
+
+# Tomato slices and similar processed variants
+TomatoSlice = Tomato
+AppleSlice = Apple
+BreadSlice = Bread
+
+# Scrub brush naming
+ScrubBrush = Brush
+
+# Some common alternate names
+CupGlass = Glass
+CoffeeMaker = CoffeeMachine
+TeaKettle = Kettle
