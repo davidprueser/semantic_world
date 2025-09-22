@@ -3,7 +3,7 @@ import re
 from ...datastructures.prefixed_name import PrefixedName
 from ...spatial_types.spatial_types import TransformationMatrix
 from ...views.factories import (
-    HandleFactory,
+    OuterHandleFactory,
     ContainerFactory,
     Direction,
     DrawerFactory,
@@ -20,7 +20,7 @@ def drawer_factory_from_body(drawer: Body) -> DrawerFactory:
     This function assumes that the drawer body has a bounding box that can be used to determine its
     scale and that a handle can be created with a standard size.
     """
-    handle_factory = HandleFactory(
+    handle_factory = OuterHandleFactory(
         name=PrefixedName(drawer.name.name + "_handle", drawer.name.prefix),
         scale=Scale(0.05, 0.1, 0.02),
     )
@@ -47,7 +47,7 @@ def door_factory_from_body(door: Body) -> DoorFactory:
     This function assumes that the door body has a bounding box that can be used to determine its
     scale and that a handle can be created with a standard size.
     """
-    handle_factory = HandleFactory(
+    handle_factory = OuterHandleFactory(
         PrefixedName(door.name.name + "_handle", door.name.prefix),
         Scale(0.05, 0.1, 0.02),
     )
