@@ -1,3 +1,4 @@
+import enum
 from dataclasses import dataclass, field
 from enum import IntEnum
 from typing_extensions import TypeVar, Generic
@@ -11,7 +12,7 @@ from ..world_description.connections import (
     RevoluteConnection,
 )
 from ..world_description.degree_of_freedom import DegreeOfFreedom
-from ..world_description.geometry import Scale, Box
+from ..world_description.geometry import Scale, Box, Color
 from ..world_description.shape_collection import BoundingBoxCollection, ShapeCollection
 from ..world_description.world_entity import Body, Region
 from ..datastructures.prefixed_name import PrefixedName
@@ -990,7 +991,7 @@ class WallFactory(ViewFactory[Wall]):
                     wall_world.merge_world(door_world, connection)
 
 @dataclass
-class HoleHandleFactory(ViewFactory[Handle]):
+class CutOutHandleFactory(ViewFactory[Handle]):
     """
     Factory that cuts a hole into a wall.
     """
@@ -1000,7 +1001,7 @@ class HoleHandleFactory(ViewFactory[Handle]):
     The scale of the handle.
     """
 
-    def create(self) -> World:
+    def _create(self, world: World) -> World:
         handle_event = self.create_handle_event()
 
         handle = Body(name=self.name)
@@ -1010,10 +1011,10 @@ class HoleHandleFactory(ViewFactory[Handle]):
 
         handle_view = Handle(name=self.name, body=handle)
 
-        world = World()
-        world.add_kinematic_structure_entity(handle)
-        world.add_view(handle_view)
-        return world
+        handle_world = world
+        handle_world.add_kinematic_structure_entity(handle)
+        handle_world.add_view(handle_view)
+        return handle_world
 
     def create_handle_event(self) -> SimpleEvent:
         x_interval = closed(-self.scale.x / 2, self.scale.x / 2)
@@ -1030,8 +1031,13 @@ class HoleHandleFactory(ViewFactory[Handle]):
         return handle_event
 
 
+class DrawerSize(enum.Enum):
+    BIG = enum.auto()
+    SMALL = enum.auto()
+
+
 @dataclass
-class IkeaDrawerFactory(ViewFactory[Drawer]):
+class IkeaAlexDrawerFactory(ViewFactory[Drawer]):
     """
     Factory for an IKEA ALEX drawer.
     Returns a drawer.
@@ -1042,33 +1048,39 @@ class IkeaDrawerFactory(ViewFactory[Drawer]):
     The name of the drawer (applied to the drawer body and Drawer view).
     """
 
-    handle_factory: HoleHandleFactory
+    size: DrawerSize = DrawerSize.SMALL
     """
-    The factory for the handle.
-    """
-
-    container_factory: ContainerFactory
-    """
-    The factory for the container.
+    The size of the drawer, either BIG or SMALL.
     """
 
-    def create(self) -> World:
+    def __post_init__(self):
+        """
+        Precompute the container and handle factories for the drawer.
+        """
+        match self.size:
+            case DrawerSize.BIG:
+                self.container_factory = ContainerFactory(name=PrefixedName(f"{self.name}_container"), direction=Direction.Z,
+                                                          scale=Scale(0.55, 0.3, 0.15), wall_thickness=0.015)
+            case DrawerSize.SMALL:
+                self.container_factory = ContainerFactory(name=PrefixedName(f"{self.name}_container"), direction=Direction.Z,
+                                                          scale=Scale(0.55, 0.3, 0.11), wall_thickness=0.015)
+            case _:
+                raise ValueError(f"Invalid drawer size: {self.size}")
+
+        # x: as thick as the container wall
+        # y: half of the y scale of the container
+        # z: 5% of the z scale of the container (could be any desired value)
+        self.handle_factory = CutOutHandleFactory(name=PrefixedName(f"{self.name}_handle"), scale=Scale(self.container_factory.wall_thickness / 2,
+                                                                                                        self.container_factory.scale.y / 2,
+                                                                                                        self.container_factory.scale.z / 20))
+
+    def _create(self, world: World) -> World:
         """
         Return a world with a drawer at its root. The drawer consists of a container and a handle.
         1. Create the drawer body by creating a container event and removing a small cutout from the front to create a graspable part.
         2. Create the container and handle using their respective factories.
         3. Add the handle to the drawer body at the correct position.
         """
-        self.handle_factory.scale = Scale(self.container_factory.wall_thickness / 2,
-                                          self.container_factory.scale.y / 2,
-                                          self.handle_factory.scale.z)
-
-        drawer_world = World()
-        drawer_body = Body(name=self.name)
-        collision = self._create_drawer_collision(drawer_body)
-        drawer_body.collision = collision
-        drawer_body.visual = collision
-        drawer_world.add_kinematic_structure_entity(drawer_body)
 
         container_world = self.container_factory.create()
         container_view = container_world.get_views_by_type(Container)[0]
@@ -1076,15 +1088,17 @@ class IkeaDrawerFactory(ViewFactory[Drawer]):
         handle_world = self.handle_factory.create()
         handle_view = handle_world.get_views_by_type(Handle)[0]
 
-        self._add_handle_to_drawer(drawer_world, handle_world)
+        self._add_handle_to_drawer(container_world, handle_world)
+        collision = self._create_drawer_collision(container_world.bodies[0])
+        container_world.bodies[0].collision = collision
+        container_world.bodies[1].collision.shapes[0].color = Color(1, 1, 0, 1)
 
-        drawer = Drawer(name=self.name, container=container_view, handle=handle_view)
-        drawer_world.add_view(drawer)
+        drawer_view = Drawer(name=self.name, container=container_view, handle=handle_view)
+        container_world.add_view(drawer_view)
 
-        return drawer_world
+        return container_world
 
-
-    def _create_drawer_collision(self, body: Body) -> List[Box]:
+    def _create_drawer_collision(self, body: Body) -> ShapeCollection:
         """
         Create the collision shapes for the drawer body by creating a container event, removing the graspable part from the container,
         and converting the resulting event to shapes.
@@ -1130,11 +1144,9 @@ class IkeaDrawerFactory(ViewFactory[Drawer]):
         :param container_event: The event representing the container.
         :return: The modified container event with the top outer boundary removed.
         """
-        # cutout x: exclude the front wall
         cutout_x = closed(-self.container_factory.scale.x / 2, self.container_factory.scale.x / 2 - self.container_factory.wall_thickness / 2)
         cutout_y = closed(-self.container_factory.scale.y / 2, self.container_factory.scale.y / 2)
-        # cutout z: remove the top 15% of the height relative to the total container scale
-        cutout_z = closed(self.container_factory.scale.z / 2 - (self.container_factory.scale.z / 13.33), self.container_factory.scale.z / 2)
+        cutout_z = closed(self.container_factory.scale.z / 2 -  0.015, self.container_factory.scale.z / 2)
 
         cutout_event = SimpleEvent(
             {
@@ -1166,6 +1178,145 @@ class IkeaDrawerFactory(ViewFactory[Drawer]):
         )
 
         drawer_world.merge_world(handle_world, connection_drawer_T_handle)
+
+
+@dataclass
+class IkeaAlexCabinetFactory(ViewFactory[Dresser]):
+    """
+    Factory for an IKEA ALEX cabinet.
+    Returns a dresser with 3 bigger drawers and 2 smaller drawers.
+    """
+
+    name: PrefixedName = field(default_factory=lambda: PrefixedName("IKEA_AlexCabinet"))
+    """
+    The name of the dresser.
+    """
+
+    def __post_init__(self):
+        """
+        Precompute the container and drawer factories for the dresser.
+        1. Create the container factory for the dresser body.
+        2. Create 3 big drawer factories and 2 small drawer factories.
+        3. Initialize the drawer transforms list with identity matrices.
+        4. Position the drawers in the dresser.
+        5. Note: Doors are not included in this dresser model.
+        """
+        self.container_factory: ContainerFactory =  ContainerFactory(name=PrefixedName(self.name.name),
+                                                                     scale=Scale(0.58, 0.33, 0.7), wall_thickness=0.015)
+        self.drawer_factories: List[IkeaAlexDrawerFactory] = []
+        for i in range(2):
+            smaller_drawer_factory: IkeaAlexDrawerFactory = IkeaAlexDrawerFactory(
+                name=PrefixedName(f'{self.name}_drawer_small_{i}'),
+                size=DrawerSize.SMALL,
+            )
+            self.drawer_factories.append(smaller_drawer_factory)
+
+        for i in range(3):
+            bigger_drawer_factory: IkeaAlexDrawerFactory = IkeaAlexDrawerFactory(
+                name=PrefixedName(f'{self.name}_drawer_big_{i}'),
+                size=DrawerSize.BIG,
+            )
+            self.drawer_factories.append(bigger_drawer_factory)
+
+        self.drawer_transforms: List[TransformationMatrix] = [TransformationMatrix() for _ in range(len(self.drawer_factories))]
+
+
+    def _create(self, world: World) -> World:
+        """
+        Return a world with a dresser at its root. The dresser consists of a container, 4 drawers, and 2 doors.
+        1. Create the dresser body by creating a container event and removing the front wall to create an open front.
+        2. Create 3 bigger drawers using the IkeaDrawerFactory and position them in the dresser.
+        3. Create 2 smaller drawers using the IkeaDrwaerFactory and position them in the dresser.
+        """
+
+        self.position_drawers(self.drawer_factories)
+        dresser_world = self.make_dresser_world()
+        return dresser_world
+
+    def position_drawers(self, drawers: List[IkeaAlexDrawerFactory]):
+        """
+        Position the drawers in the dresser. The two smaller drawers are positioned at the top, and the three bigger drawers
+        are positioned below them.
+        """
+        gap = 0.004
+        z_top = self.container_factory.scale.z / 2
+
+        sorted_drawers = sorted(
+            enumerate(drawers),
+            key=lambda x: 0 if x[1].size == DrawerSize.SMALL else 1
+        )
+
+        current_z = z_top
+        for idx, (original_index, drawer) in enumerate(sorted_drawers):
+            drawer_height = drawer.container_factory.scale.z
+            z_offset = current_z - (drawer_height / 2)
+            self.drawer_transforms[original_index] = TransformationMatrix.from_xyz_rpy(0, 0, z_offset, 0, 0, 0)
+            current_z -= drawer_height + gap
+
+    def make_dresser_world(self) -> World:
+        """
+        Create a world with a dresser view that contains a container, drawers, and doors, but no interior yet.
+        """
+        dresser_world = self.container_factory.create()
+        container_view: Container = dresser_world.get_views_by_type(Container)[0]
+
+        self.add_drawers_to_world(dresser_world)
+
+        dresser_view = Dresser(
+            name=self.name,
+            container=container_view,
+            drawers=[drawer for drawer in dresser_world.get_views_by_type(Drawer)],
+            doors=[door for door in dresser_world.get_views_by_type(Door)],
+        )
+        dresser_world.add_view(dresser_view, exists_ok=True)
+        dresser_world.name = self.name.name
+
+        return dresser_world
+
+    def add_drawers_to_world(self, parent_world: World):
+        """
+        Adds drawers to the parent world. A prismatic connection is created for each drawer.
+        """
+        for drawer_factory, transform in zip(
+                self.drawer_factories, self.drawer_transforms
+        ):
+            drawer_world = drawer_factory.create()
+
+            drawer_view: Drawer = drawer_world.get_views_by_type(Drawer)[0]
+            drawer_body = drawer_view.container.body
+
+            lower_limits, upper_limits = self.create_drawer_upper_lower_limits(drawer_factory)
+
+            dof = DegreeOfFreedom(
+                name=PrefixedName(
+                    f"{drawer_body.name.name}_connection", drawer_body.name.prefix
+                ),
+                lower_limits=lower_limits,
+                upper_limits=upper_limits,
+            )
+
+            connection = PrismaticConnection(
+                parent=parent_world.root,
+                child=drawer_body,
+                origin_expression=transform,
+                multiplier=1.0,
+                offset=0.0,
+                axis=Vector3.X(),
+                dof=dof,
+            )
+
+            parent_world.merge_world(drawer_world, connection)
+
+    def create_drawer_upper_lower_limits(self, factory: IkeaAlexDrawerFactory):
+        """
+        Return the upper and lower limits for the drawer's degree of freedom.
+        """
+        lower_limits = DerivativeMap[float]()
+        lower_limits.position = 0.0
+        upper_limits = DerivativeMap[float]()
+        upper_limits.position = factory.container_factory.scale.x * 0.75
+
+        return lower_limits, upper_limits
 
 
 def add_door_to_world(
