@@ -824,32 +824,3 @@ class Pepper(Food):
         r"^(?:robothor_)?pepper(?:[_a-z0-9].*)?$",
     )
     ...
-
-
-# -----------------------------
-# Simple aliases for variant-heavy ProcTHOR names
-# (No extra subclasses; just point variants to a general class.)
-# -----------------------------
-
-# Fixtures
-LightSwitchDial = Knob  # e.g., light_switch_dial_X
-FaucetKnob = Knob  # e.g., sink_faucet_knob_*
-
-# Containers/bottles
-WineBottle = Bottle  # e.g., wine_bottle_*
-
-# Cleaning / bottles
-DishSoap = SoapBottle  # generic alias if used
-
-# Tomato slices and similar processed variants
-TomatoSlice = Tomato
-AppleSlice = Apple
-BreadSlice = Bread
-
-# Scrub brush naming
-ScrubBrush = Brush
-
-# Some common alternate names
-CupGlass = Glass
-CoffeeMaker = CoffeeMachine
-TeaKettle = Kettle
