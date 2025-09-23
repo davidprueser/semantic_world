@@ -11,6 +11,7 @@
 - Minimize duplication of code
 - Use the semantic_world/doc/styleguide.md for naming transformation variables
 - Do not wrap attribute access in try-except blocks
+- Always access attributes via ".", never via getattr
 - Use existing packages whenever possible
 - Reduce nesting, reduce complexity
 - Use short but descriptive names

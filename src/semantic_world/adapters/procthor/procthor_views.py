@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from functools import cached_property
 
 from typing_extensions import List, Self
-from typing import ClassVar
+from typing import ClassVar, Optional
 import re
 
 
@@ -21,19 +21,27 @@ from dataclasses import dataclass
 @dataclass(eq=False)
 class HouseholdObject(View, ABC):
     """
-    Abstract base class for all household objects.
+    Abstract base class for all household objects. Each view refers to a single Body.
     """
 
-    name_pattern: ClassVar[re.Pattern] = field(init=False)
+    body: Body
+    name_pattern: ClassVar[Optional[re.Pattern]] = field(init=False, default=None)
 
     @classmethod
-    def from_world(cls) -> List[Self]:
+    def from_world(cls, world: World) -> List[Self]:
         """
-        Generate this class of view from a world by finding bodies that match the name pattern.
+        Create views for all bodies in the world whose unprefixed name matches the class' name_pattern.
 
-        :return: A list of views generated from the world.
+        :param world: The world to search in.
+        :return: A list of view instances with their corresponding body assigned.
         """
-        raise NotImplementedError
+        views: List[Self] = []
+        for body in world.bodies_with_enabled_collision:
+            # Body names are PrefixedName; use the unprefixed part for matching
+            body_name = body.name.name.lower()
+            if cls.name_pattern and cls.name_pattern.match(body_name):
+                views.append(cls(body=body))
+        return views
 
 
 # Containers and Kitchenware
