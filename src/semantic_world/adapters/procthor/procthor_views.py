@@ -85,7 +85,11 @@ class HouseholdObject(View):
         Shelf.shelves, CounterTop.region) should override this method.
         """
         # Find matching bodies by regex against the underlying (unprefixed) name
-        matches = [b for b in world.bodies if cls.matches_name(b.name.name.lower())]
+        matches = [
+            b
+            for b in world.bodies_with_enabled_collision
+            if cls.matches_name(b.name.name.lower())
+        ]
         return [cls(body=b) for b in matches]
 
 
@@ -224,59 +228,43 @@ class Hanger(Fixture):  # e.g., ToiletPaperHanger
 
 # Furniture and supporting surfaces
 @dataclass(eq=False)
-class Chair(Furniture):
+class SingleBodyByNamePattern(Furniture):
+    """Base class for furniture mapped by a single body matched via name_pattern.
+
+    Provides a common from_world implementation that selects the first matching
+    body deterministically (by prefixed name) or raises if none are found.
+    """
+
     body: Body
+
+    @classmethod
+    def from_world(cls, world: World) -> Self:
+        matches = [
+            b for b in world.bodies if _matches_class_name(cls, b.name.name.lower())
+        ]
+        if not matches:
+            raise ValueError(
+                f"No bodies in world match patterns {getattr(cls, 'name_pattern', tuple())} for {cls.__name__}."
+            )
+        body = sorted(matches, key=lambda e: str(e.name))[0]
+        return cls(body=body)
+
+
+@dataclass(eq=False)
+class Chair(SingleBodyByNamePattern):
     name_pattern: ClassVar[tuple[str, ...]] = (
         r"^(?:robothor_)?chair(?:[_a-z0-9].*)?$",
     )
 
-    @classmethod
-    def from_world(cls, world: World) -> Self:
-        matches = [
-            b for b in world.bodies if _matches_class_name(cls, b.name.name.lower())
-        ]
-        if not matches:
-            raise ValueError(
-                f"No bodies in world match patterns {getattr(cls, 'name_pattern', tuple())} for {cls.__name__}."
-            )
-        body = sorted(matches, key=lambda e: str(e.name))[0]
-        return cls(body=body)
-
 
 @dataclass(eq=False)
-class Sofa(Furniture):
-    body: Body
+class Sofa(SingleBodyByNamePattern):
     name_pattern: ClassVar[tuple[str, ...]] = (r"^(?:robothor_)?sofa(?:[_a-z0-9].*)?$",)
 
-    @classmethod
-    def from_world(cls, world: World) -> Self:
-        matches = [
-            b for b in world.bodies if _matches_class_name(cls, b.name.name.lower())
-        ]
-        if not matches:
-            raise ValueError(
-                f"No bodies in world match patterns {getattr(cls, 'name_pattern', tuple())} for {cls.__name__}."
-            )
-        body = sorted(matches, key=lambda e: str(e.name))[0]
-        return cls(body=body)
-
 
 @dataclass(eq=False)
-class Bed(Furniture):
-    body: Body
+class Bed(SingleBodyByNamePattern):
     name_pattern: ClassVar[tuple[str, ...]] = (r"^(?:robothor_)?bed(?:[_a-z0-9].*)?$",)
-
-    @classmethod
-    def from_world(cls, world: World) -> Self:
-        matches = [
-            b for b in world.bodies if _matches_class_name(cls, b.name.name.lower())
-        ]
-        if not matches:
-            raise ValueError(
-                f"No bodies in world match patterns {getattr(cls, 'name_pattern', tuple())} for {cls.__name__}."
-            )
-        body = sorted(matches, key=lambda e: str(e.name))[0]
-        return cls(body=body)
 
 
 @dataclass(eq=False)
@@ -298,11 +286,10 @@ class Desk(Furniture):
 
 
 @dataclass(eq=False)
-class Shelf(Furniture):
+class ShelvesByNamePattern(Furniture):
+    """Base class for furniture with multiple shelves matched via name_pattern."""
+
     shelves: List[Body] = field(default_factory=list, hash=False)
-    name_pattern: ClassVar[tuple[str, ...]] = (
-        r"^(?:robothor_)?shelf(?:[_a-z0-9].*)?$",
-    )
 
     @classmethod
     def from_world(cls, world: World) -> Self:
@@ -318,6 +305,13 @@ class Shelf(Furniture):
 
 
 @dataclass(eq=False)
+class Shelf(ShelvesByNamePattern):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?shelf(?:[_a-z0-9].*)?$",
+    )
+
+
+@dataclass(eq=False)
 class Bookshelf(Shelf):
     name_pattern: ClassVar[tuple[str, ...]] = (
         r"^(?:robothor_)?bookshelf(?:[_a-z0-9].*)?$",
@@ -326,11 +320,10 @@ class Bookshelf(Shelf):
 
 
 @dataclass(eq=False)
-class CounterTop(SupportingSurface):
+class RegionByNamePattern(SupportingSurface):
+    """Base class for supporting surfaces backed by a region matched via name_pattern."""
+
     region: Region
-    name_pattern: ClassVar[tuple[str, ...]] = (
-        r"^(?:robothor_)?(?:countertop|counter_top|counter)(?:[_a-z0-9].*)?$",
-    )
 
     @classmethod
     def from_world(cls, world: World) -> Self:
@@ -343,6 +336,13 @@ class CounterTop(SupportingSurface):
             )
         region = sorted(matches, key=lambda e: str(e.name))[0]
         return cls(region=region)
+
+
+@dataclass(eq=False)
+class CounterTop(RegionByNamePattern):
+    name_pattern: ClassVar[tuple[str, ...]] = (
+        r"^(?:robothor_)?(?:countertop|counter_top|counter)(?:[_a-z0-9].*)?$",
+    )
 
 
 # Appliances

@@ -1,7 +1,7 @@
 # Semantic World Guidelines
 
 ## Testing
-- Always execute the tests with pytest
+- If you need to run tests, execute them with pytest
 - Reuse existing fixtures
 - Always use a test-driven development approach
 
