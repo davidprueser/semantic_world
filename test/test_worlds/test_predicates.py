@@ -9,16 +9,15 @@ from semantic_world.reasoning.predicates import (
     contact,
     robot_in_collision,
     visible,
-    above,
-    below,
-    left_of,
-    right_of,
-    behind,
-    in_front_of,
+    Above,
+    Below,
+    LeftOf,
+    RightOf,
+    Behind,
+    InFrontOf,
     is_body_in_region,
     occluding_bodies,
     is_supported_by,
-    _center_of_mass_in_world,
     is_body_in_gripper,
     robot_holds_body,
     reachable,
@@ -211,40 +210,40 @@ def test_above_and_below(two_block_world):
     center, top = two_block_world
 
     pov = TransformationMatrix.from_xyz_rpy(x=-3)
-    assert above(top, center, pov)
-    assert below(center, top, pov)
+    assert Above(top, center, pov)()
+    assert Below(center, top, pov)()
 
     pov = TransformationMatrix.from_xyz_rpy(x=3, yaw=np.pi)
-    assert above(top, center, pov)
-    assert below(center, top, pov)
+    assert Above(top, center, pov)()
+    assert Below(center, top, pov)()
 
     pov = TransformationMatrix.from_xyz_rpy(x=3, roll=np.pi)
-    assert above(center, top, pov)
-    assert below(top, center, pov)
+    assert Above(center, top, pov)()
+    assert Below(top, center, pov)()
 
 
 def test_left_and_right(two_block_world):
     center, top = two_block_world
 
     pov = TransformationMatrix.from_xyz_rpy(x=3, roll=np.pi / 2)
-    assert left_of(top, center, pov)
-    assert right_of(center, top, pov)
+    assert LeftOf(top, center, pov)()
+    assert RightOf(center, top, pov)()
 
     pov = TransformationMatrix.from_xyz_rpy(x=3, roll=-np.pi / 2)
-    assert right_of(top, center, pov)
-    assert left_of(center, top, pov)
+    assert RightOf(top, center, pov)()
+    assert LeftOf(center, top, pov)()
 
 
 def test_behind_and_in_front_of(two_block_world):
     center, top = two_block_world
 
     pov = TransformationMatrix.from_xyz_rpy(z=-5, pitch=np.pi / 2)
-    assert behind(top, center, pov)
-    assert in_front_of(center, top, pov)
+    assert Behind(top, center, pov)()
+    assert InFrontOf(center, top, pov)()
 
     pov = TransformationMatrix.from_xyz_rpy(z=5, pitch=-np.pi / 2)
-    assert in_front_of(top, center, pov)
-    assert behind(center, top, pov)
+    assert InFrontOf(top, center, pov)()
+    assert Behind(center, top, pov)
 
 
 def test_body_in_region(two_block_world):
@@ -290,7 +289,7 @@ def test_is_body_in_gripper(
 
     left_gripper = (
         gripper[0]
-        if left_of(gripper[0].root, gripper[1].root, pr2.root.global_pose)
+        if LeftOf(gripper[0].root, gripper[1].root, pr2.root.global_pose)()
         else gripper[1]
     )
 
@@ -304,8 +303,8 @@ def test_is_body_in_gripper(
     test_box.collision = ShapeCollection([box_collision])
 
     # Calculate position between fingers
-    finger1_pos = _center_of_mass_in_world(left_gripper.finger.tip)
-    finger2_pos = _center_of_mass_in_world(left_gripper.thumb.tip)
+    finger1_pos = left_gripper.finger.tip.collision.center_of_mass_in_world()
+    finger2_pos = left_gripper.thumb.tip.collision.center_of_mass_in_world()
     between_fingers = (finger1_pos + finger2_pos) / 2.0
 
     # Add box to world

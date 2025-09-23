@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from functools import cached_property
 from typing import Dict, Any, Self, Optional, List, Iterator
 
+import numpy as np
 from random_events.product_algebra import Event, SimpleEvent
 from random_events.utils import SubclassJSONSerializer
 from trimesh import Trimesh
@@ -155,6 +156,17 @@ class ShapeCollection(SubclassJSONSerializer):
     @classmethod
     def _from_json(cls, data: Dict[str, Any]) -> Self:
         return cls(shapes=[Shape.from_json(d) for d in data["shapes"]])
+
+    def center_of_mass_in_world(self) -> np.ndarray:
+        """
+        :return: The center of mass of this shape collection in the world coordinate frame.
+        """
+        # Center of mass in the body's local frame (collision geometry)
+        com_local = self.combined_mesh.center_mass  # (3,)
+        # Transform to world frame using the body's global pose
+        T_bw = self.reference_frame.global_pose.to_np()  # body -> world
+        com_h = np.array([com_local[0], com_local[1], com_local[2], 1.0], dtype=float)
+        return (T_bw @ com_h)[:3]
 
 
 @dataclass

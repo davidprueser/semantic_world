@@ -1,4 +1,6 @@
 import itertools
+from abc import ABC
+from dataclasses import dataclass
 
 import numpy as np
 import trimesh.boolean
@@ -11,6 +13,7 @@ from entity_query_language import (
     not_,
     the,
     symbolic_mode,
+    Predicate,
 )
 from random_events.interval import Interval
 from typing_extensions import List, Optional
@@ -21,10 +24,8 @@ from ..datastructures.prefixed_name import PrefixedName
 from ..datastructures.variables import SpatialVariables
 from ..robots import (
     Camera,
-    Manipulator,
     AbstractRobot,
     ParallelGripper,
-    Arm,
 )
 from ..spatial_computations.ik_solver import (
     MaxIterationsException,
@@ -282,7 +283,7 @@ def is_supported_by(
     If the intersection is higher than this value, the check returns False due to unhandled clipping.
     :return: True if the second object is supported by the first object, False otherwise
     """
-    if below(supported_body, supporting_body, supported_body.global_pose):
+    if Below(supported_body, supporting_body, supported_body.global_pose)():
         return False
     bounding_box_supported_body = (
         supported_body.collision.as_bounding_box_collection_at_origin(
@@ -374,136 +375,103 @@ def is_body_in_region(body: Body, region: Region) -> float:
     return intersection.volume / body_volume
 
 
-def left_of(body: Body, other: Body, point_of_view: TransformationMatrix) -> bool:
+@dataclass
+class SpatialRelation(Predicate, ABC):
     """
-    Check if the body is left of the other body if you are looking from the point of view.
+    Check if the body is spatially related to the other body if you are looking from the point of view.
+    The comparison is done using the centers of mass computed from the bodies' collision geometry.
+    """
 
+    body: Body
+    """
+    The body for which the check should be done.
+    """
+
+    other: Body
+    """
+    The other body.
+     """
+
+    point_of_view: TransformationMatrix
+    """
+    The reference spot from where to look at the bodies.
+    """
+    eps: float = 1e-12
+
+    def _signed_distance_along_direction(self, index: int) -> float:
+        """
+        Calculate the spatial relation between self.body and self.other with respect to a given
+        reference point (self.point_of_view) and a specified axis index. This function computes the
+        signed distance along a specified direction derived from the reference point
+        to compare the positions of the centers of mass of the two bodies.
+
+        :param index: The index of the axis in the transformation matrix along which
+            the spatial relation is computed.
+        :return: The signed distance between the first and the second body's centers
+            of mass along the given direction.
+        """
+        ref_np = self.point_of_view.to_np()
+        front_world = ref_np[:3, index]
+        front_norm = front_world / (np.linalg.norm(front_world) + self.eps)
+
+        s_body = float(
+            np.dot(front_norm, self.body.collision.center_of_mass_in_world())
+        )
+        s_other = float(
+            np.dot(front_norm, self.other.collision.center_of_mass_in_world())
+        )
+        return s_body - s_other
+
+
+class LeftOf(SpatialRelation):
+    """
     The "left" direction is taken as the -Y axis of the given point of view.
-    The comparison is done using the centers of mass computed from the bodies' collision geometry.
-
-    :param body: The body for which the check should be done.
-    :param other: The other body.
-    :param point_of_view: The reference spot from where to look at the bodies.
-    :return: True if the body is left of the other body, False otherwise
     """
-    return _signed_distance_along_direction(body, other, point_of_view, 1) > 0.0
+
+    def __call__(self) -> bool:
+        return self._signed_distance_along_direction(1) > 0.0
 
 
-def right_of(body: Body, other: Body, point_of_view: TransformationMatrix) -> bool:
+class RightOf(SpatialRelation):
     """
-    Check if the body is right of the other body if you are looking from the point of view.
-
     The "right" direction is taken as the +Y axis of the given point of view.
-    The comparison is done using the centers of mass computed from the bodies' collision geometry.
-
-    :param body: The body for which the check should be done.
-    :param other: The other body.
-    :param point_of_view: The reference pose that defines the up direction for the comparison.
-    :return: True if the body is right of the other body, False otherwise
     """
-    return _signed_distance_along_direction(body, other, point_of_view, 1) < 0.0
+
+    def __call__(self) -> bool:
+        return self._signed_distance_along_direction(1) < 0.0
 
 
-def above(body: Body, other: Body, point_of_view: TransformationMatrix) -> bool:
+class Above(SpatialRelation):
     """
-    Check if the body is above the other body with respect to the point_of_view's up direction (+Z axis).
-
-    The "up" direction is taken as the +Z axis of the given point_of_view.
-    The comparison is done using the centers of mass computed from the bodies' collision geometry.
-
-    :param body: The body for which the check should be done.
-    :param other: The other body.
-    :param point_of_view: The reference spot from where to look at the bodies.
-    :return: True if the center of mass of "body" is above that of "other" along the point_of_view's +Z axis.
+    The "above" direction is taken as the +Z axis of the given point of view.
     """
-    return _signed_distance_along_direction(body, other, point_of_view, 2) > 0.0
+
+    def __call__(self) -> bool:
+        return self._signed_distance_along_direction(2) > 0.0
 
 
-def below(body: Body, other: Body, point_of_view: TransformationMatrix) -> bool:
+class Below(SpatialRelation):
     """
-    Check if the body is below the other body with respect to the point of view's up direction (+Z axis).
-
     The "below" direction is taken as the -Z axis of the given point of view.
-    The comparison is done using the centers of mass computed from the bodies' collision geometry.
-
-    :param body: The body for which the check should be done.
-    :param other: The other body.
-    :param point_of_view: The reference spot from where to look at the bodies.
-    :return: True if the center of mass of "body" is below that of "other" along the point_of_view's +Z axis.
     """
-    return _signed_distance_along_direction(body, other, point_of_view, 2) < 0.0
+
+    def __call__(self) -> bool:
+        return self._signed_distance_along_direction(2) < 0.0
 
 
-def behind(body: Body, other: Body, point_of_view: TransformationMatrix) -> bool:
+class Behind(SpatialRelation):
     """
-    Check if the body is behind the other body if you are looking from the point of view.
-
     The "behind" direction is defined as the -X axis of the given point of view.
-    The comparison is done using the centers of mass computed from the bodies' collision
-    geometry.
-
-    :param body: The body for which the check should be done.
-    :param other: The other body.
-    :param point_of_view: The reference spot from where to look at the bodies.
-    :return: True if the body is behind the other body, False otherwise
     """
-    return _signed_distance_along_direction(body, other, point_of_view, 0) < 0.0
+
+    def __call__(self) -> bool:
+        return self._signed_distance_along_direction(0) < 0.0
 
 
-def in_front_of(body: Body, other: Body, point_of_view: TransformationMatrix) -> bool:
+class InFrontOf(SpatialRelation):
     """
-    Check if the body is in front of another body if you are looking from the point of view.
-
-    The "front" direction is defined as the +X axis of the given point of view.
-    The comparison is done using the centers of mass computed from the bodies' collision
-    geometry.
-
-    :param body: The body for which the check should be done.
-    :param other: The other body.
-    :param point_of_view: The reference spot from where to look at the bodies.
-    :return: True if the body is in front of the other body, False otherwise
+    The "in front of" direction is defined as the +X axis of the given point of view.
     """
-    return _signed_distance_along_direction(body, other, point_of_view, 0) > 0.0
 
-
-def _center_of_mass_in_world(b: Body) -> np.ndarray:
-    """
-    Compute the center of mass of an object in the world coordinate frame.
-    :param b: The body to compute the center of mass of.
-    :return: The bodies center of mass as a 3D array.
-    """
-    # Center of mass in the body's local frame (collision geometry)
-    com_local = b.collision.combined_mesh.center_mass  # (3,)
-    # Transform to world frame using the body's global pose
-    T_bw = b.global_pose.to_np()  # body -> world
-    com_h = np.array([com_local[0], com_local[1], com_local[2], 1.0], dtype=float)
-    return (T_bw @ com_h)[:3]
-
-
-def _signed_distance_along_direction(
-    body: Body, other: Body, point_of_view: TransformationMatrix, index: int
-) -> float:
-    """
-    Calculate the spatial relation between two bodies with respect to a given
-    reference point and a specified axis index. This function computes the
-    signed distance along a specified direction derived from the reference point
-    to compare the positions of the centers of mass of the two bodies.
-
-    :param body: The first body for which the spatial relation is calculated.
-    :param other: The second body to which the spatial relation is compared.
-    :param point_of_view: Transformation matrix that provides the reference
-        frame for the calculation.
-    :param index: The index of the axis in the transformation matrix along which
-        the spatial relation is computed.
-    :return: The signed distance between the first and the second body's centers
-        of mass along the given direction. A positive result indicates that the
-        first body's center of mass is further along the direction of the
-        specified axis than the second body's center of mass.
-    """
-    ref_np = point_of_view.to_np()
-    front_world = ref_np[:3, index]
-    front_norm = front_world / (np.linalg.norm(front_world) + 1e-12)
-
-    s_body = float(np.dot(front_norm, _center_of_mass_in_world(body)))
-    s_other = float(np.dot(front_norm, _center_of_mass_in_world(other)))
-    return s_body - s_other
+    def __call__(self) -> bool:
+        return self._signed_distance_along_direction(0) > 0.0
