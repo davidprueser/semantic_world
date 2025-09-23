@@ -262,7 +262,9 @@ class Desk(Table):
     A desk.
     """
 
-    name_pattern = re.compile(r"^(?:ps_)?robothor_desk_(\w+)(?:_drawer_\d+)?$")
+    name_pattern = re.compile(
+        r"^(?:ps_)?robothor_desk_(?!.*lamp_ai2)(?!.*lamp_)(?!.*lamp$)\w+(?:_drawer_\d+)?$"
+    )
 
 
 @dataclass(eq=False)
