@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from functools import cached_property
 
 from typing_extensions import List, Self
-from typing import ClassVar, Optional
+from typing import ClassVar, Optional, Iterable, Tuple, Type
 import re
 
 
@@ -18,6 +18,88 @@ from abc import ABC
 from dataclasses import dataclass
 
 
+@dataclass
+class MatchRule:
+    """Declarative matching rule over underscore-separated tokens.
+
+    A rule matches if all required tokens are present, no forbidden tokens are present,
+    and, if a prefix is defined, the name starts with that prefix followed by an underscore.
+    """
+
+    required: set[str] = field(default_factory=set)
+    forbidden: set[str] = field(default_factory=set)
+    prefix: Optional[str] = None
+    base_priority: int = 0  # prefer specializations over generic classes
+
+    def matches(self, name: str, tokens: list[str]) -> bool:
+        if self.prefix and not name.startswith(self.prefix + "_"):
+            return False
+        if not self.required.issubset(tokens):
+            return False
+        if self.forbidden.intersection(tokens):
+            return False
+        return True
+
+
+class AmbiguousNameError(ValueError):
+    """Raised when more than one view class matches a given name with the same score."""
+
+
+class UnresolvedNameError(ValueError):
+    """Raised when no view class matches a given name."""
+
+
+class ProcthorResolver:
+    """Central resolver that deterministically maps a ProcTHOR name to exactly one class."""
+
+    def __init__(self, classes: Iterable[Type["HouseholdObject"]]):
+        self._classes: tuple[Type[HouseholdObject], ...] = tuple(classes)
+
+    @staticmethod
+    def _tokens(name: str) -> list[str]:
+        # split and drop trailing numeric id tokens
+        raw = name.lower().split("_")
+        if raw and raw[-1].isdigit():
+            raw = raw[:-1]
+        return raw
+
+    def resolve(self, name: str) -> Type["HouseholdObject"]:
+        tokens = self._tokens(name)
+        candidates: list[Tuple[Tuple[int, int, int], Type[HouseholdObject]]] = []
+        for cls in self._classes:
+            rule = getattr(cls, "rule", None)
+            if rule is None:
+                continue
+            if rule.matches(name, tokens):
+                # More required tokens and higher base_priority win; fewer forbidden preferred
+                score = (len(rule.required), rule.base_priority, -len(rule.forbidden))
+                candidates.append((score, cls))
+        if not candidates:
+            raise UnresolvedNameError(f"No class matches '{name}'")
+        candidates.sort(key=lambda x: x[0], reverse=True)
+        best_score, best_cls = candidates[0]
+        if len(candidates) > 1 and candidates[1][0] == best_score:
+            other = candidates[1][1]
+            raise AmbiguousNameError(
+                f"Ambiguous mapping for '{name}': {best_cls.__name__} vs {other.__name__}"
+            )
+        return best_cls
+
+
+def build_procthor_resolver() -> ProcthorResolver:
+    """Build a resolver from all concrete HouseholdObject subclasses in this module that define rules."""
+    classes: list[type[HouseholdObject]] = []
+    for obj in list(globals().values()):
+        if (
+            isinstance(obj, type)
+            and issubclass(obj, HouseholdObject)
+            and obj is not HouseholdObject
+        ):
+            if getattr(obj, "rule", None) is not None:
+                classes.append(obj)
+    return ProcthorResolver(classes)
+
+
 @dataclass(eq=False)
 class HouseholdObject(View, ABC):
     """
@@ -26,6 +108,9 @@ class HouseholdObject(View, ABC):
 
     body: Body
     name_pattern: ClassVar[Optional[re.Pattern]] = field(init=False, default=None)
+
+    # Optional token rule used by the central resolver
+    rule: ClassVar[Optional[MatchRule]] = None
 
     @classmethod
     def from_world(cls, world: World) -> List[Self]:
@@ -61,6 +146,7 @@ class Bottle(Container):
     """
 
     name_pattern = re.compile(r"^(?:(soap|wine)_)bottle(_volume)?_(\d+)?$")
+    rule = MatchRule(required={"bottle"}, forbidden={"soap", "wine"}, base_priority=-10)
 
 
 @dataclass(eq=False)
@@ -70,6 +156,7 @@ class SoapBottle(Bottle):
     """
 
     name_pattern = re.compile(r"^soap_bottle(_volume)?_(\d+)?$")
+    rule = MatchRule(required={"soap", "bottle"}, base_priority=10)
 
 
 @dataclass(eq=False)
@@ -79,6 +166,7 @@ class WineBottle(Bottle):
     """
 
     name_pattern = re.compile(r"^wine_bottle(_volume)?(_cork)?_(\d+)?$")
+    rule = MatchRule(required={"wine", "bottle"}, base_priority=10)
 
 
 @dataclass(eq=False)
@@ -88,6 +176,7 @@ class Cup(Container):
     """
 
     name_pattern = re.compile(r"^cup(?:_volume)?(?:_\d+)?$")
+    rule = MatchRule(required={"cup"})
 
 
 @dataclass(eq=False)
@@ -97,6 +186,7 @@ class Mug(Container):
     """
 
     name_pattern = re.compile(r"^mug(?:_liquid_volume)?(?:_ai2)?(?:_\d+)?$")
+    rule = MatchRule(required={"mug"})
 
 
 @dataclass(eq=False)
@@ -106,6 +196,7 @@ class Pan(HouseholdObject):
     """
 
     name_pattern = re.compile(r"^pan_(\d+)$")
+    rule = MatchRule(required={"pan"})
 
 
 @dataclass(eq=False)
@@ -115,6 +206,7 @@ class PanLid(HouseholdObject):
     """
 
     name_pattern = re.compile(r"^pan_lid_(\d+)$")
+    rule = MatchRule(required={"pan", "lid"})
 
 
 @dataclass(eq=False)
@@ -124,6 +216,7 @@ class Pot(HouseholdObject):
     """
 
     name_pattern = re.compile(r"^pot(?:_liquid_volume)?(?:_volume)?_(\d+)$")
+    rule = MatchRule(required={"pot"})
 
 
 @dataclass(eq=False)
@@ -133,6 +226,7 @@ class PotLid(HouseholdObject):
     """
 
     name_pattern = re.compile(r"^pot_lid_(\d+)$")
+    rule = MatchRule(required={"pot", "lid"})
 
 
 @dataclass(eq=False)
@@ -142,6 +236,7 @@ class Plate(HouseholdObject):
     """
 
     name_pattern = re.compile(r"^robothor_plate_ai2$")
+    rule = MatchRule(required={"robothor", "plate", "ai2"})
 
 
 @dataclass(eq=False)
@@ -151,6 +246,7 @@ class Bowl(HouseholdObject):
     """
 
     name_pattern = re.compile(r"^robothor_bowl_ai2$")
+    rule = MatchRule(required={"robothor", "bowl", "ai2"})
 
 
 # Food Items
@@ -170,6 +266,7 @@ class Tomato(Produce):
     """
 
     name_pattern = re.compile(r"^tomato_[a-z]\d+_(?:slice_\d+|mesh)?$")
+    rule = MatchRule(required={"tomato"})
 
 
 @dataclass(eq=False)
@@ -179,6 +276,7 @@ class Lettuce(Produce):
     """
 
     name_pattern = re.compile(r"^lettuce_[a-z]\d+_(?:slice_\d+)?$")
+    rule = MatchRule(required={"lettuce"})
 
 
 @dataclass(eq=False)
@@ -188,6 +286,7 @@ class Apple(Produce):
     """
 
     name_pattern = re.compile(r"^apple(?:_slice)?[ab]\d+$")
+    rule = MatchRule(required={"apple"})
 
 
 @dataclass(eq=False)
@@ -197,6 +296,7 @@ class Bread(HouseholdObject):
     """
 
     name_pattern = re.compile(r"^bread[123]_[abc]_(?:slice_\d+)?_mesh$")
+    rule = MatchRule(required={"bread"})
 
 
 @dataclass(eq=False)
@@ -206,6 +306,7 @@ class FriedEgg(HouseholdObject):
     """
 
     name_pattern = re.compile(r"^fried_egg_\d+$")
+    rule = MatchRule(required={"fried", "egg"})
 
 
 # Furniture and Fixtures
@@ -234,6 +335,7 @@ class CoffeeTable(Table):
     """
 
     name_pattern = re.compile(r"^(?:ps_)?robothor_coffee_table_(\w+)$")
+    rule = MatchRule(required={"robothor", "coffee", "table"}, base_priority=10)
 
 
 @dataclass(eq=False)
@@ -243,6 +345,7 @@ class DiningTable(Table):
     """
 
     name_pattern = re.compile(r"^robothor_dining_table_(\w+)$")
+    rule = MatchRule(required={"robothor", "dining", "table"}, base_priority=10)
 
 
 @dataclass(eq=False)
@@ -254,6 +357,7 @@ class SideTable(Table):
     name_pattern = re.compile(
         r"^(?:ps_)?robothor_side_table_(\w+)(?:_drawer_\d+)?(?:_lid)?$"
     )
+    rule = MatchRule(required={"robothor", "side", "table"}, base_priority=10)
 
 
 @dataclass(eq=False)
@@ -265,6 +369,7 @@ class Desk(Table):
     name_pattern = re.compile(
         r"^(?:ps_)?robothor_desk_(?!.*lamp_ai2)(?!.*lamp_)(?!.*lamp$)\w+(?:_drawer_\d+)?$"
     )
+    rule = MatchRule(required={"robothor", "desk"}, forbidden={"lamp"})
 
 
 @dataclass(eq=False)
@@ -274,6 +379,11 @@ class Chair(Furniture):
     """
 
     name_pattern = re.compile(r"^robothor_chair_(\w+)$")
+    rule = MatchRule(
+        required={"robothor", "chair"},
+        forbidden={"office", "armchair"},
+        base_priority=-5,
+    )
 
 
 @dataclass(eq=False)
@@ -283,6 +393,7 @@ class OfficeChair(Chair):
     """
 
     name_pattern = re.compile(r"^robothor_office_chair_(\w+)$")
+    rule = MatchRule(required={"robothor", "office", "chair"}, base_priority=10)
 
 
 @dataclass(eq=False)
@@ -292,6 +403,7 @@ class Armchair(Chair):
     """
 
     name_pattern = re.compile(r"^robothor_armchair_(\w+)$")
+    rule = MatchRule(required={"robothor", "armchair"}, base_priority=10)
 
 
 @dataclass(eq=False)
@@ -303,6 +415,7 @@ class ShelvingUnit(Furniture):
     name_pattern = re.compile(
         r"^(?:ps_)?robothor_shelving_unit_kallax_(\w+)(?:_drawer_\d+)?$"
     )
+    rule = MatchRule(required={"robothor", "shelving", "unit", "kallax"})
 
 
 @dataclass(eq=False)
@@ -314,6 +427,7 @@ class Dresser(Furniture):
     name_pattern = re.compile(
         r"^robothor_dresser_(\w+)(?:_container)?(?:_drawer_\d+)?(?:_handle)?$"
     )
+    rule = MatchRule(required={"robothor", "dresser"})
 
 
 @dataclass(eq=False)
@@ -325,6 +439,7 @@ class Bed(Furniture):
     name_pattern = re.compile(
         r"^robothor_bed_(\w+)(?:_day)?(?:_drawer_\d+)?(?:_bedsheet)?(?:_mattress)?$"
     )
+    rule = MatchRule(required={"robothor", "bed"})
 
 
 @dataclass(eq=False)
@@ -334,6 +449,7 @@ class Sofa(Furniture):
     """
 
     name_pattern = re.compile(r"^robothor_sofa_(\w+)$")
+    rule = MatchRule(required={"robothor", "sofa"})
 
 
 @dataclass(eq=False)
@@ -343,6 +459,7 @@ class ToiletPaperHanger(HouseholdObject):
     """
 
     name_pattern = re.compile(r"^toilet_paper_hanger_(\d+)$")
+    rule = MatchRule(required={"toilet", "paper", "hanger"})
 
 
 @dataclass(eq=False)
@@ -352,6 +469,7 @@ class Sink(HouseholdObject):
     """
 
     name_pattern = re.compile(r"^sink_\d+$")
+    rule = MatchRule(required={"sink"}, forbidden={"faucet"})
 
 
 @dataclass(eq=False)
@@ -361,6 +479,7 @@ class SinkFaucet(HouseholdObject):
     """
 
     name_pattern = re.compile(r"^sink_faucet(?:_l|_r)?_(\d+)?$")
+    rule = MatchRule(required={"sink", "faucet"}, forbidden={"knob"}, base_priority=5)
 
 
 @dataclass(eq=False)
@@ -370,6 +489,7 @@ class SinkFaucetKnob(HouseholdObject):
     """
 
     name_pattern = re.compile(r"^sink_faucet_knob(?:_l|_r)?(?:_(\d+))?$")
+    rule = MatchRule(required={"sink", "faucet", "knob"}, base_priority=10)
 
 
 @dataclass(eq=False)
@@ -379,6 +499,7 @@ class Faucet(HouseholdObject):
     """
 
     name_pattern = re.compile(r"^faucet(?:_tee)?_(\d+)?$")
+    rule = MatchRule(required={"faucet"}, forbidden={"sink"})
 
 
 @dataclass(eq=False)
