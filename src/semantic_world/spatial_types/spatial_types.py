@@ -134,15 +134,18 @@ class CompiledFunction:
         """
         Compile function for sparse matrices.
         """
-        casadi_expression = ca.sparsify(self.expression.casadi_sx)
+        self.expression.casadi_sx = ca.sparsify(self.expression.casadi_sx)
         self._compiled_casadi_function = ca.Function(
-            "f", casadi_parameters, [casadi_expression]
+            "f", casadi_parameters, [self.expression.casadi_sx]
         )
 
         self._function_buffer, self._function_evaluator = (
             self._compiled_casadi_function.buffer()
         )
-        self.csc_indices, self.csc_indptr = casadi_expression.sparsity().get_ccs()
+        self.csc_indices, self.csc_indptr = (
+            self.expression.casadi_sx.sparsity().get_ccs()
+        )
+        self.zeroes = np.zeros(self.expression.casadi_sx.nnz())
 
     def _compile_dense_function(self, casadi_parameters: List[Symbol]) -> None:
         """
@@ -150,9 +153,9 @@ class CompiledFunction:
 
         :param casadi_parameters: List of CasADi parameters for the function
         """
-        casadi_expression = ca.densify(self.expression.casadi_sx)
+        self.expression.casadi_sx = ca.densify(self.expression.casadi_sx)
         self._compiled_casadi_function = ca.Function(
-            "f", casadi_parameters, [casadi_expression]
+            "f", casadi_parameters, [self.expression.casadi_sx]
         )
 
         self._function_buffer, self._function_evaluator = (
@@ -174,7 +177,7 @@ class CompiledFunction:
         """
         self._out = sp.csc_matrix(
             arg1=(
-                np.zeros(self.expression.casadi_sx.nnz()),
+                self.zeroes,
                 self.csc_indptr,
                 self.csc_indices,
             ),
@@ -737,6 +740,7 @@ class Expression(
                 NumericalArray,
                 Numerical2dMatrix,
                 Iterable[Symbol],
+                Iterable[Expression],
             ]
         ]
     ] = None
@@ -2330,7 +2334,7 @@ class RotationMatrix(SymbolicType, ReferenceFrameMixin, MatrixOperationsMixin):
 
 
 @dataclass(eq=False)
-class Point3(SymbolicType, ReferenceFrameMixin):
+class Point3(SymbolicType, ReferenceFrameMixin, VectorOperationsMixin):
     """
     Represents a 3D point with reference frame handling.
 

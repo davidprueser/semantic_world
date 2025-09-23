@@ -677,14 +677,14 @@ def get_world_by_asset_id(session: Session, asset_id: str) -> Optional[World]:
     asset_id = asset_id.lower()
     expr = the(
         entity(
-            world := let(name="world", type_=WorldMapping),
+            world := let(type_=WorldMapping),
             world.name == asset_id,
         )
     )
     other_possible_name = "_".join(asset_id.split("_")[:-1])
     expr2 = the(
         entity(
-            world := let(name="world", type_=WorldMapping),
+            world := let(type_=WorldMapping),
             world.name == other_possible_name,
         )
     )

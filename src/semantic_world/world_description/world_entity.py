@@ -12,6 +12,7 @@ from functools import lru_cache
 import numpy as np
 import trimesh
 import trimesh.boolean
+from entity_query_language import symbol
 from random_events.utils import SubclassJSONSerializer
 from scipy.stats import geom
 from trimesh.proximity import closest_point, nearby_faces
@@ -42,6 +43,7 @@ if TYPE_CHECKING:
 id_generator = IDGenerator()
 
 
+@symbol
 @dataclass(unsafe_hash=True)
 class WorldEntity:
     """

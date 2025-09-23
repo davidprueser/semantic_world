@@ -26,7 +26,7 @@ from semantic_world.reasoning.predicates import (
 )
 from semantic_world.robots import PR2, Camera, ParallelGripper
 from semantic_world.spatial_types.spatial_types import TransformationMatrix
-from semantic_world.testing import pr2_world
+from semantic_world.testing import *
 from semantic_world.world import World
 from semantic_world.world_description.connections import Connection6DoF, FixedConnection
 from semantic_world.world_description.geometry import Box, Scale, Color
@@ -34,7 +34,7 @@ from semantic_world.world_description.shape_collection import ShapeCollection
 from semantic_world.world_description.world_entity import Body, Region
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
 def two_block_world():
     def make_body(name: str) -> Body:
         result = Body(name=PrefixedName(name))

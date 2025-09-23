@@ -60,34 +60,38 @@ def urdf_joint_to_limits(
     """
     lower_limits = DerivativeMap()
     upper_limits = DerivativeMap()
+    limit = getattr(urdf_joint, "limit", None)
     if not urdf_joint.type == "continuous":
-        try:
-            lower_limits.position = max(
-                urdf_joint.safety_controller.soft_lower_limit, urdf_joint.limit.lower
-            )
-            upper_limits.position = min(
-                urdf_joint.safety_controller.soft_upper_limit, urdf_joint.limit.upper
-            )
-        except AttributeError:
-            try:
-                lower_limits.position = urdf_joint.limit.lower
-                upper_limits.position = urdf_joint.limit.upper
-            except AttributeError:
-                pass
-    try:
-        lower_limits.velocity = -urdf_joint.limit.velocity
-        upper_limits.velocity = urdf_joint.limit.velocity
-    except AttributeError:
-        pass
+        lower = limit.lower if limit is not None else None
+        upper = limit.upper if limit is not None else None
+
+        safety_controller = getattr(urdf_joint, "safety_controller", None)
+        lower = (
+            max(safety_controller.soft_lower_limit, limit.lower)
+            if safety_controller is not None and limit is not None
+            else lower
+        )
+        upper = (
+            min(safety_controller.soft_upper_limit, limit.upper)
+            if safety_controller is not None and limit is not None
+            else upper
+        )
+
+        lower_limits.position = lower
+        upper_limits.position = upper
+
+    velocity = getattr(limit, "velocity", None) if limit is not None else None
+    lower_limits.velocity = -velocity if velocity is not None else None
+    upper_limits.velocity = velocity if velocity is not None else None
+
     if urdf_joint.mimic is not None:
-        if urdf_joint.mimic.multiplier is not None:
-            multiplier = urdf_joint.mimic.multiplier
-        else:
-            multiplier = 1
-        if urdf_joint.mimic.offset is not None:
-            offset = urdf_joint.mimic.offset
-        else:
-            offset = 0
+        multiplier = (
+            urdf_joint.mimic.multiplier
+            if urdf_joint.mimic.multiplier is not None
+            else 1
+        )
+        offset = urdf_joint.mimic.offset if urdf_joint.mimic.offset is not None else 0
+
         for d2 in Derivatives.range(Derivatives.position, Derivatives.velocity):
             lower_limits.data[d2] -= offset
             upper_limits.data[d2] -= offset
@@ -193,16 +197,9 @@ class URDFParser:
         """
         connection_name = PrefixedName(joint.name, prefix)
         connection_type = connection_type_map.get(joint.type, Connection)
-        if joint.origin is not None:
-            translation_offset = joint.origin.xyz
-            rotation_offset = joint.origin.rpy
-        else:
-            translation_offset = None
-            rotation_offset = None
-        if translation_offset is None:
-            translation_offset = [0, 0, 0]
-        if rotation_offset is None:
-            rotation_offset = [0, 0, 0]
+        translation_offset = getattr(joint.origin, "xyz", [0, 0, 0])
+        rotation_offset = getattr(joint.origin, "rpy", [0, 0, 0])
+
         parent_T_child = cas.TransformationMatrix.from_xyz_rpy(
             x=translation_offset[0],
             y=translation_offset[1],
@@ -211,8 +208,8 @@ class URDFParser:
             pitch=rotation_offset[1],
             yaw=rotation_offset[2],
         )
-        if connection_type == FixedConnection:
-            return connection_type(
+        if connection_type is FixedConnection:
+            return FixedConnection(
                 name=connection_name,
                 parent=parent,
                 child=child,
@@ -220,22 +217,14 @@ class URDFParser:
             )
 
         lower_limits, upper_limits = urdf_joint_to_limits(joint)
-        is_mimic = joint.mimic is not None
-        multiplier = None
-        offset = None
-        if is_mimic:
-            if joint.mimic.multiplier is not None:
-                multiplier = joint.mimic.multiplier
-            else:
-                multiplier = 1
-            if joint.mimic.offset is not None:
-                offset = joint.mimic.offset
-            else:
-                offset = 0
-
-            # dof_name = PrefixedName(joint.mimic.joint, prefix)
-
         dof_name = connection_name
+        multiplier = offset = None
+        if joint.mimic:
+            multiplier = (
+                joint.mimic.multiplier if joint.mimic.multiplier is not None else 1
+            )
+            offset = joint.mimic.offset if joint.mimic.offset is not None else 0
+            dof_name = PrefixedName(joint.mimic.joint, prefix)
 
         try:
             dof = world.get_degree_of_freedom_by_name(dof_name)

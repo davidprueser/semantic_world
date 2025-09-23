@@ -44,7 +44,6 @@ from .spatial_computations.forward_kinematics import ForwardKinematicsVisitor
 from .spatial_computations.ik_solver import InverseKinematicsSolver
 from .spatial_types import spatial_types as cas
 from .spatial_types.derivatives import Derivatives
-from .spatial_types.math import inverse_frame
 from .datastructures.types import NpMatrix4x4
 from .utils import IDGenerator, copy_lru_cache
 from .world_description.connections import (

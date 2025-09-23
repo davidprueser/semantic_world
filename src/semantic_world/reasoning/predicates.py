@@ -2,7 +2,16 @@ import itertools
 
 import numpy as np
 import trimesh.boolean
-from entity_query_language import let, an, entity, contains, and_, not_, the, predicate
+from entity_query_language import (
+    let,
+    an,
+    entity,
+    contains,
+    and_,
+    not_,
+    the,
+    symbolic_mode,
+)
 from random_events.interval import Interval
 from typing_extensions import List, Optional
 
@@ -78,16 +87,18 @@ def robot_in_collision(
     if ignore_collision_with is None:
         ignore_collision_with = []
 
-    body = let("body", type_=Body, domain=robot._world.bodies_with_enabled_collision)
-    possible_collisions_bodies = an(
-        entity(
-            body,
-            and_(
-                not_(contains(robot.bodies, body)),
-                not_(contains(ignore_collision_with, body)),
+    with symbolic_mode():
+        body = let(type_=Body, domain=robot._world.bodies_with_enabled_collision)
+        possible_collisions_bodies = an(
+            entity(
+                body,
+                and_(
+                    not_(contains(robot.bodies, body)),
+                    not_(contains(ignore_collision_with, body)),
+                ),
             ),
-        ),
-    ).evaluate()
+        )
+    possible_collisions_bodies = possible_collisions_bodies.evaluate()
 
     tcd = TrimeshCollisionDetector(robot._world)
 
@@ -110,13 +121,14 @@ def robot_holds_body(robot: AbstractRobot, body: Body) -> bool:
     :param body: The body to check if it is picked
     :return: True if the robot is holding the object, False otherwise
     """
-    grippers = an(
-        entity(
-            g := let("gripper", ParallelGripper, robot._world.views), g._robot == robot
+    with symbolic_mode():
+        grippers = an(
+            entity(g := let(ParallelGripper, robot._world.views), g._robot == robot)
         )
-    ).evaluate()
 
-    return any([is_body_in_gripper(body, gripper) > 0.0 for gripper in grippers])
+    return any(
+        [is_body_in_gripper(body, gripper) > 0.0 for gripper in grippers.evaluate()]
+    )
 
 
 def get_visible_bodies(camera: Camera) -> List[KinematicStructureEntity]:
@@ -253,10 +265,9 @@ def blocking(
         for dof, state in result.items():
             root._world.state[dof.name].position = state
 
-    robot = the(
-        entity(r := let("robot", AbstractRobot, root._world.views), tip in r.bodies)
-    ).evaluate()
-    return robot_in_collision(robot, [])
+    with symbolic_mode():
+        robot = the(entity(r := let(AbstractRobot, root._world.views), tip in r.bodies))
+    return robot_in_collision(robot.evaluate(), [])
 
 
 def is_supported_by(

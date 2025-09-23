@@ -31,7 +31,7 @@ import time
 
 import numpy as np
 import rclpy
-from entity_query_language import the, entity, let
+from entity_query_language import the, entity, let, symbolic_mode
 
 from semantic_world.adapters.viz_marker import VizMarkerPublisher
 from semantic_world.datastructures.prefixed_name import PrefixedName
@@ -87,12 +87,12 @@ viz = VizMarkerPublisher(world=world, node=node)
 Let's get a reference to the drawer we built above.
 
 ```python
-drawer = the(
-    entity(
-        let("drawer", type_=Drawer, domain=world.views),
-        True,
-    )
-).evaluate()
+with symbolic_mode():
+    drawer = the(
+        entity(
+            let(type_=Drawer, domain=world.views),
+        )
+    ).evaluate()
 ```
 
 We can update the drawer's state by altering the free variables position of its prismatic connection to the dresser.
@@ -123,7 +123,8 @@ Now we can start moving the dresser everywhere and even rotate it.
 ```python
 from semantic_world.world_description.world_entity import Connection
 
-free_connection = the(entity(connection := let("connection", type_=Connection, domain=world.connections), connection.parent == world.root)).evaluate()
+with symbolic_mode():
+    free_connection = the(entity(connection := let(type_=Connection, domain=world.connections), connection.parent == world.root)).evaluate()
 time.sleep(1)
 with world.modify_world():
     free_connection.origin_expression = TransformationMatrix.from_xyz_rpy(1., 1., 0, 0., 0., 0.5 * np.pi)
@@ -138,7 +139,8 @@ Since it is an aggregation of all degree of freedoms existing in the world, it c
 We can close the drawer again as follows:
 
 ```python
-dof = the(entity(name := let("degree_of_freedom", type_=PrefixedName, domain=world.state.keys()), name.name == "drawer_container_connection")).evaluate()
+with symbolic_mode():
+    dof = the(entity(name := let(type_=PrefixedName, domain=world.state.keys()), name.name == "drawer_container_connection")).evaluate()
 with world.modify_world():
     world.state[dof] = [0., 0, 0, 0.]
 time.sleep(1.)

@@ -34,7 +34,7 @@ First, let's create a world containing a drawer.
 from dataclasses import dataclass
 from typing import List
 
-from entity_query_language import entity, an, let
+from entity_query_language import entity, an, let, symbolic_mode
 
 from semantic_world.datastructures.prefixed_name import PrefixedName
 from semantic_world.spatial_types.spatial_types import TransformationMatrix
@@ -65,7 +65,8 @@ For instance, an agent might want to open a drawer. Opening a drawer is done by 
 Due to the semantic structure, it is easily possible to access this information for the agent by formulating a query like this
 
 ```python
-handles = an(entity(let("handle", Handle, world.views)))
+with symbolic_mode():
+    handles = an(entity(let(Handle, world.views)))
 print(list(handles.evaluate()))
 ```
 
@@ -88,15 +89,17 @@ with world.modify_world():
 If we now evaluate the handle query, we see that multiple options exist.
 
 ```python
-print(*list(an(entity(let("handle", Handle, world.views))).evaluate()), sep="\n")
+print(*handles.evaluate(), sep="\n")
 ```
 
 We can refine the handle the agent wants by saying it must belong to a drawer
 
 ```python
-drawer = let("drawer", Drawer, world.views)
-handle = let("handle", Handle, world.views)
-print(*list(an(entity(handle, drawer.handle == handle)).evaluate()), sep="\n")
+with symbolic_mode():
+    drawer = let(Drawer, world.views)
+    handle = let(Handle, world.views)
+    result = an(entity(handle, drawer.handle == handle))
+print(*result.evaluate(), sep="\n")
 ```
 
 Now we will shift the focus to creating new views.

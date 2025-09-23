@@ -2,6 +2,7 @@ import os
 import threading
 import time
 
+from entity_query_language.symbolic import Variable
 from typing_extensions import Tuple
 
 import pytest
@@ -217,3 +218,24 @@ def rclpy_node():
 
         # Shut down the ROS client library
         rclpy.shutdown()
+
+
+@pytest.fixture(autouse=True, scope="function")
+def cleanup_after_test():
+    # Setup: runs before each test
+    yield
+    # Teardown: runs after each test
+    for c in Variable._cache_.values():
+        c.clear()
+    Variable._cache_.clear()
+
+
+@pytest.fixture()
+def kitchen_world():
+    path = os.path.join(
+        os.path.dirname(__file__), "..", "..", "resources", "urdf", "kitchen-small.urdf"
+    )
+    parser = URDFParser.from_file(file_path=path)
+    world = parser.parse()
+    world.validate()
+    return world
