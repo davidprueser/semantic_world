@@ -1,15 +1,14 @@
 ---
-jupyter:
-  jupytext:
-    text_representation:
-      extension: .md
-      format_name: markdown
-      format_version: '1.3'
-      jupytext_version: 1.17.3
-  kernelspec:
-    display_name: Python 3
-    language: python
-    name: python3
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+    format_version: 0.13
+    jupytext_version: 1.16.4
+kernelspec:
+  display_name: Python 3
+  language: python
+  name: python3
 ---
 
 (semantic_annotations)=
@@ -30,7 +29,7 @@ Used Concepts:
 
 First, let's create a world containing a drawer.
 
-```python
+```{code-cell} ipython2
 from dataclasses import dataclass
 from typing import List
 
@@ -49,22 +48,26 @@ from semantic_world.world import World
 from semantic_world.world_description.connections import Connection6DoF
 from semantic_world.world_description.geometry import Sphere, Scale
 from semantic_world.world_description.world_entity import View, Body
+from semantic_world.spatial_computations.raytracer import RayTracer
 
 
 world = DrawerFactory(
     name=PrefixedName("drawer"),
-    container_factory=ContainerFactory(name=PrefixedName("container")),
+    container_factory=ContainerFactory(name=PrefixedName("container"), direction=Direction.Z),
     handle_factory=HandleFactory(name=PrefixedName("handle")),
 ).create()
 
 print(*world.views, sep="\n")
+rt = RayTracer(world)
+rt.update_scene()
+rt.scene.show("jupyter")
 ```
 
 The annotations now proof useful when an agent needs to infer information from the world.
 For instance, an agent might want to open a drawer. Opening a drawer is done by grasping the drawer handle.
 Due to the semantic structure, it is easily possible to access this information for the agent by formulating a query like this
 
-```python
+```{code-cell} ipython2
 with symbolic_mode():
     handles = an(entity(let(Handle, world.views)))
 print(list(handles.evaluate()))
@@ -75,26 +78,31 @@ in the world. For instance, consider a world that has a second handle that is at
 shouldn't be used by the agent to open a drawer.
 
 
-```python
-
+```{code-cell} ipython2
 useless_handle = HandleFactory(name=PrefixedName("useless handle")).create()
+rt = RayTracer(useless_handle)
+rt.update_scene()
+rt.scene.show("jupyter")
 print(useless_handle.views)
+
 with world.modify_world():
     world.merge_world_at_pose(
         useless_handle, TransformationMatrix.from_xyz_rpy(x=1.0, y=1.0)
     )
-
+rt = RayTracer(world)
+rt.update_scene()
+rt.scene.show("jupyter")
 ```
 
 If we now evaluate the handle query, we see that multiple options exist.
 
-```python
+```{code-cell} ipython2
 print(*handles.evaluate(), sep="\n")
 ```
 
 We can refine the handle the agent wants by saying it must belong to a drawer
 
-```python
+```{code-cell} ipython2
 with symbolic_mode():
     drawer = let(Drawer, world.views)
     handle = let(Handle, world.views)
@@ -108,7 +116,7 @@ Make sure you follow the (Liskov substitution principle)[https://en.wikipedia.or
 Views define what they relate to via their attribute types.
 For instance, we can make an Apple view that classifies a body as an apple.
 
-```python
+```{code-cell} ipython2
 @dataclass
 class Apple(View):
     """A simple custom view declaring that a Body is an Apple."""
@@ -142,11 +150,14 @@ with world.modify_world():
     world.add_view(apple_view)
 
 print(world.views)
+rt = RayTracer(world)
+rt.update_scene()
+rt.scene.show("jupyter")
 ```
 
 Views can become arbitrary complex. For instance, we can make a box of fruits.
 
-```python
+```{code-cell} ipython2
 @dataclass
 class FruitBox(View):
     box: Container
@@ -186,6 +197,9 @@ fruit_box = FruitBox(
 )
 world.add_view(fruit_box)
 print(f"Fruit box with {len(fruit_box.fruits)} fruits")
+rt = RayTracer(world)
+rt.update_scene()
+rt.scene.show("jupyter")
 ```
 
 One great quality of this is that every other agent who imports your definitions of views in the world is now able

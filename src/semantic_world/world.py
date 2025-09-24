@@ -29,9 +29,9 @@ from typing_extensions import (
 from typing_extensions import List
 from typing_extensions import Type, Set
 
-from .world_description.connection_factories import ConnectionFactory
 from .callbacks.callback import StateChangeCallback, ModelChangeCallback
 from .datastructures.prefixed_name import PrefixedName
+from .datastructures.types import NpMatrix4x4
 from .exceptions import (
     DuplicateViewError,
     AddingAnExistingViewError,
@@ -44,8 +44,8 @@ from .spatial_computations.forward_kinematics import ForwardKinematicsVisitor
 from .spatial_computations.ik_solver import InverseKinematicsSolver
 from .spatial_types import spatial_types as cas
 from .spatial_types.derivatives import Derivatives
-from .datastructures.types import NpMatrix4x4
 from .utils import IDGenerator, copy_lru_cache
+from .world_description.connection_factories import ConnectionFactory
 from .world_description.connections import (
     ActiveConnection,
     PassiveConnection,
@@ -436,10 +436,16 @@ class World:
         self._add_degree_of_freedom(dof)
 
     @atomic_world_modification(modification=RemoveDegreeOfFreedomModification)
-    def remove_degree_of_freedom(self, dof: DegreeOfFreedom) -> None:
+    def _remove_degree_of_freedom(self, dof: DegreeOfFreedom) -> None:
         dof._world = None
         self.degrees_of_freedom.remove(dof)
         del self.state[dof.name]
+
+    def remove_degree_of_freedom(self, dof: DegreeOfFreedom) -> None:
+        if dof._world is self:
+            self._remove_degree_of_freedom(dof)
+        else:
+            logger.debug("Trying to remove an dof that is not part of this world.")
 
     def modify_world(self) -> WorldModelUpdateContextManager:
         return WorldModelUpdateContextManager(self)
@@ -874,16 +880,11 @@ class World:
         with self.modify_world():
             self_root = self.root
             other_root = other.root
-            for dof in other.degrees_of_freedom:
-                self.state[dof.name].position = other.state[dof.name].position
-                self.state[dof.name].velocity = other.state[dof.name].velocity
-                self.state[dof.name].acceleration = other.state[dof.name].acceleration
-                self.state[dof.name].jerk = other.state[dof.name].jerk
-                dof._world = self
-            self.degrees_of_freedom.extend(other.degrees_of_freedom)
-
-            # do not trigger computations in other
             with other.modify_world():
+                other_dof = other.degrees_of_freedom.copy()
+                for dof in other_dof:
+                    other.remove_degree_of_freedom(dof)
+                    self.add_degree_of_freedom(dof)
                 for connection in other.connections:
                     other.remove_kinematic_structure_entity(connection.parent)
                     other.remove_kinematic_structure_entity(connection.child)
@@ -902,8 +903,6 @@ class World:
             connection = root_connection or Connection6DoF(
                 parent=self_root, child=other_root, _world=self
             )
-            for dof in connection.dofs:
-                self.add_degree_of_freedom(dof)
             self.add_connection(connection, handle_duplicates=handle_duplicates)
 
     def move_branch(
