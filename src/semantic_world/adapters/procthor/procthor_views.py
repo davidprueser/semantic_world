@@ -8,7 +8,7 @@ from typing_extensions import List, Self
 from typing import ClassVar, Optional, Iterable, Tuple, Type
 import re
 
-
+from ...views.views import Container, Table
 from ...world import World
 
 # Reuse the common world/view primitives so ProcTHOR views integrate seamlessly.
@@ -86,66 +86,56 @@ class ProcthorResolver:
         return best_cls
 
 
-def build_procthor_resolver() -> ProcthorResolver:
-    """Build a resolver from all concrete HouseholdObject subclasses in this module that define rules."""
-    classes: list[type[HouseholdObject]] = []
-    for obj in list(globals().values()):
-        if (
-            isinstance(obj, type)
-            and issubclass(obj, HouseholdObject)
-            and obj is not HouseholdObject
-        ):
-            if getattr(obj, "rule", None) is not None:
-                classes.append(obj)
-    return ProcthorResolver(classes)
-
-
 @dataclass(eq=False)
 class HouseholdObject(View, ABC):
     """
     Abstract base class for all household objects. Each view refers to a single Body.
+    Each subclass automatically derives a MatchRule from its own class name and
+    the names of its HouseholdObject ancestors. This makes specialized subclasses
+    naturally more specific than their bases.
     """
 
     body: Body
-    name_pattern: ClassVar[Optional[re.Pattern]] = field(init=False, default=None)
 
     # Optional token rule used by the central resolver
     rule: ClassVar[Optional[MatchRule]] = None
 
-    @classmethod
-    def from_world(cls, world: World) -> List[Self]:
-        """
-        Create views for all bodies in the world whose unprefixed name matches the class' name_pattern.
+    @staticmethod
+    def _tokens_from_classname(name: str) -> list[str]:
+        """Split a CamelCase class name into lowercase underscore-separated tokens."""
+        # Insert underscore between lowercase/number followed by uppercase, then split
+        s = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", name)
+        # Handle sequences like "RGBLED" -> "rgb_led"
+        s = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", s)
+        return s.lower().split("_")
 
-        :param world: The world to search in.
-        :return: A list of view instances with their corresponding body assigned.
-        """
-        views: List[Self] = []
-        for body in world.bodies_with_enabled_collision:
-            # Body names are PrefixedName; use the unprefixed part for matching
-            body_name = body.name.name.lower()
-            if cls.name_pattern and cls.name_pattern.match(body_name):
-                views.append(cls(body=body))
-        return views
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        # If a subclass did not provide an explicit rule, derive one from the class
+        # hierarchy: include tokens from this class and all HouseholdObject ancestors
+        # (excluding the abstract HouseholdObject itself). Sibling classes are
+        # naturally excluded as we only consider the MRO.
+        if getattr(cls, "rule", None) is None:
+            required_tokens: set[str] = set()
+            for base in cls.mro():
+                if not issubclass(base, HouseholdObject):
+                    continue
+                if base is HouseholdObject:
+                    continue
+                # Only include classes declared in this module to avoid external mixins
+                if base.__module__ != HouseholdObject.__module__:
+                    continue
+                required_tokens.update(HouseholdObject._tokens_from_classname(base.__name__))
+            if required_tokens:
+                cls.rule = MatchRule(required=required_tokens)
 
 
-# Containers and Kitchenware
 @dataclass(eq=False)
-class Container(HouseholdObject):
-    """
-    Abstract class for containers.
-    """
-
-    pass
-
-
-@dataclass(eq=False)
-class Bottle(Container):
+class Bottle(Container, HouseholdObject):
     """
     Abstract class for bottles.
     """
 
-    name_pattern = re.compile(r"^(?:(soap|wine)_)bottle(_volume)?_(\d+)?$")
     rule = MatchRule(required={"bottle"}, forbidden={"soap", "wine"}, base_priority=-10)
 
 
@@ -155,7 +145,6 @@ class SoapBottle(Bottle):
     A soap bottle.
     """
 
-    name_pattern = re.compile(r"^soap_bottle(_volume)?_(\d+)?$")
     rule = MatchRule(required={"soap", "bottle"}, base_priority=10)
 
 
@@ -165,17 +154,15 @@ class WineBottle(Bottle):
     A wine bottle.
     """
 
-    name_pattern = re.compile(r"^wine_bottle(_volume)?(_cork)?_(\d+)?$")
     rule = MatchRule(required={"wine", "bottle"}, base_priority=10)
 
 
 @dataclass(eq=False)
-class Cup(Container):
+class Cup(Container, HouseholdObject):
     """
     A cup.
     """
 
-    name_pattern = re.compile(r"^cup(?:_volume)?(?:_\d+)?$")
     rule = MatchRule(required={"cup"})
 
 
@@ -185,7 +172,6 @@ class Mug(Container):
     A mug.
     """
 
-    name_pattern = re.compile(r"^mug(?:_liquid_volume)?(?:_ai2)?(?:_\d+)?$")
     rule = MatchRule(required={"mug"})
 
 
@@ -195,7 +181,6 @@ class Pan(HouseholdObject):
     A pan.
     """
 
-    name_pattern = re.compile(r"^pan_(\d+)$")
     rule = MatchRule(required={"pan"})
 
 
@@ -205,7 +190,6 @@ class PanLid(HouseholdObject):
     A pan lid.
     """
 
-    name_pattern = re.compile(r"^pan_lid_(\d+)$")
     rule = MatchRule(required={"pan", "lid"})
 
 
@@ -215,7 +199,6 @@ class Pot(HouseholdObject):
     A pot.
     """
 
-    name_pattern = re.compile(r"^pot(?:_liquid_volume)?(?:_volume)?_(\d+)$")
     rule = MatchRule(required={"pot"})
 
 
@@ -225,7 +208,6 @@ class PotLid(HouseholdObject):
     A pot lid.
     """
 
-    name_pattern = re.compile(r"^pot_lid_(\d+)$")
     rule = MatchRule(required={"pot", "lid"})
 
 
@@ -235,8 +217,7 @@ class Plate(HouseholdObject):
     A plate.
     """
 
-    name_pattern = re.compile(r"^robothor_plate_ai2$")
-    rule = MatchRule(required={"robothor", "plate", "ai2"})
+    rule = MatchRule(required={"plate"})
 
 
 @dataclass(eq=False)
@@ -245,8 +226,7 @@ class Bowl(HouseholdObject):
     A bowl.
     """
 
-    name_pattern = re.compile(r"^robothor_bowl_ai2$")
-    rule = MatchRule(required={"robothor", "bowl", "ai2"})
+    rule = MatchRule(required={"bowl"})
 
 
 # Food Items
@@ -265,7 +245,6 @@ class Tomato(Produce):
     A tomato.
     """
 
-    name_pattern = re.compile(r"^tomato_[a-z]\d+_(?:slice_\d+|mesh)?$")
     rule = MatchRule(required={"tomato"})
 
 
@@ -275,7 +254,6 @@ class Lettuce(Produce):
     Lettuce.
     """
 
-    name_pattern = re.compile(r"^lettuce_[a-z]\d+_(?:slice_\d+)?$")
     rule = MatchRule(required={"lettuce"})
 
 
@@ -285,7 +263,6 @@ class Apple(Produce):
     An apple.
     """
 
-    name_pattern = re.compile(r"^apple(?:_slice)?[ab]\d+$")
     rule = MatchRule(required={"apple"})
 
 
@@ -295,7 +272,6 @@ class Bread(HouseholdObject):
     Bread.
     """
 
-    name_pattern = re.compile(r"^bread[123]_[abc]_(?:slice_\d+)?_mesh$")
     rule = MatchRule(required={"bread"})
 
 
@@ -305,7 +281,6 @@ class FriedEgg(HouseholdObject):
     A fried egg.
     """
 
-    name_pattern = re.compile(r"^fried_egg_\d+$")
     rule = MatchRule(required={"fried", "egg"})
 
 
@@ -320,55 +295,38 @@ class Furniture(HouseholdObject):
 
 
 @dataclass(eq=False)
-class Table(Furniture):
-    """
-    Abstract class for tables.
-    """
-
-    pass
-
-
-@dataclass(eq=False)
-class CoffeeTable(Table):
+class CoffeeTable(Table, HouseholdObject):
     """
     A coffee table.
     """
 
-    name_pattern = re.compile(r"^(?:ps_)?robothor_coffee_table_(\w+)$")
-    rule = MatchRule(required={"robothor", "coffee", "table"}, base_priority=10)
+    rule = MatchRule(required={"coffee", "table"}, base_priority=10)
 
 
 @dataclass(eq=False)
-class DiningTable(Table):
+class DiningTable(Table, HouseholdObject):
     """
     A dining table.
     """
 
-    name_pattern = re.compile(r"^robothor_dining_table_(\w+)$")
-    rule = MatchRule(required={"robothor", "dining", "table"}, base_priority=10)
+    rule = MatchRule(required={"dining", "table"}, base_priority=10)
 
 
 @dataclass(eq=False)
-class SideTable(Table):
+class SideTable(Table, HouseholdObject):
     """
     A side table.
     """
 
-    name_pattern = re.compile(
-        r"^(?:ps_)?robothor_side_table_(\w+)(?:_drawer_\d+)?(?:_lid)?$"
-    )
-    rule = MatchRule(required={"robothor", "side", "table"}, base_priority=10)
+    rule = MatchRule(required={"side", "table"}, base_priority=10)
 
 
 @dataclass(eq=False)
-class Desk(Table):
+class Desk(Table, HouseholdObject):
     """
     A desk.
     """
 
-    name_pattern = re.compile(
-        r"^(?:ps_)?robothor_desk_(?!.*lamp_ai2)(?!.*lamp_)(?!.*lamp$)\w+(?:_drawer_\d+)?$"
-    )
     rule = MatchRule(required={"robothor", "desk"}, forbidden={"lamp"})
 
 
@@ -378,9 +336,8 @@ class Chair(Furniture):
     Abstract class for chairs.
     """
 
-    name_pattern = re.compile(r"^robothor_chair_(\w+)$")
     rule = MatchRule(
-        required={"robothor", "chair"},
+        required={"chair"},
         forbidden={"office", "armchair"},
         base_priority=-5,
     )
@@ -392,7 +349,6 @@ class OfficeChair(Chair):
     An office chair.
     """
 
-    name_pattern = re.compile(r"^robothor_office_chair_(\w+)$")
     rule = MatchRule(required={"robothor", "office", "chair"}, base_priority=10)
 
 
@@ -402,7 +358,6 @@ class Armchair(Chair):
     An armchair.
     """
 
-    name_pattern = re.compile(r"^robothor_armchair_(\w+)$")
     rule = MatchRule(required={"robothor", "armchair"}, base_priority=10)
 
 
@@ -412,9 +367,6 @@ class ShelvingUnit(Furniture):
     A shelving unit.
     """
 
-    name_pattern = re.compile(
-        r"^(?:ps_)?robothor_shelving_unit_kallax_(\w+)(?:_drawer_\d+)?$"
-    )
     rule = MatchRule(required={"robothor", "shelving", "unit", "kallax"})
 
 
@@ -424,9 +376,6 @@ class Dresser(Furniture):
     A dresser.
     """
 
-    name_pattern = re.compile(
-        r"^robothor_dresser_(\w+)(?:_container)?(?:_drawer_\d+)?(?:_handle)?$"
-    )
     rule = MatchRule(required={"robothor", "dresser"})
 
 
@@ -436,9 +385,6 @@ class Bed(Furniture):
     A bed.
     """
 
-    name_pattern = re.compile(
-        r"^robothor_bed_(\w+)(?:_day)?(?:_drawer_\d+)?(?:_bedsheet)?(?:_mattress)?$"
-    )
     rule = MatchRule(required={"robothor", "bed"})
 
 
@@ -448,7 +394,6 @@ class Sofa(Furniture):
     A sofa.
     """
 
-    name_pattern = re.compile(r"^robothor_sofa_(\w+)$")
     rule = MatchRule(required={"robothor", "sofa"})
 
 
@@ -458,7 +403,6 @@ class ToiletPaperHanger(HouseholdObject):
     A toilet paper hanger.
     """
 
-    name_pattern = re.compile(r"^toilet_paper_hanger_(\d+)$")
     rule = MatchRule(required={"toilet", "paper", "hanger"})
 
 
@@ -468,7 +412,6 @@ class Sink(HouseholdObject):
     A sink.
     """
 
-    name_pattern = re.compile(r"^sink_\d+$")
     rule = MatchRule(required={"sink"}, forbidden={"faucet"})
 
 
@@ -478,7 +421,6 @@ class SinkFaucet(HouseholdObject):
     A sink faucet.
     """
 
-    name_pattern = re.compile(r"^sink_faucet(?:_l|_r)?_(\d+)?$")
     rule = MatchRule(required={"sink", "faucet"}, forbidden={"knob"}, base_priority=5)
 
 
@@ -488,7 +430,6 @@ class SinkFaucetKnob(HouseholdObject):
     A sink faucet knob.
     """
 
-    name_pattern = re.compile(r"^sink_faucet_knob(?:_l|_r)?(?:_(\d+))?$")
     rule = MatchRule(required={"sink", "faucet", "knob"}, base_priority=10)
 
 
@@ -498,7 +439,6 @@ class Faucet(HouseholdObject):
     A standalone faucet.
     """
 
-    name_pattern = re.compile(r"^faucet(?:_tee)?_(\d+)?$")
     rule = MatchRule(required={"faucet"}, forbidden={"sink"})
 
 
@@ -508,7 +448,7 @@ class LightSwitch(HouseholdObject):
     A light switch.
     """
 
-    name_pattern = re.compile(r"^light_switch_\d+$")
+    rule = MatchRule(required={"light", "switch"}, forbidden={"dial"}, base_priority=10)
 
 
 @dataclass(eq=False)
@@ -517,7 +457,7 @@ class LightSwitchDial(HouseholdObject):
     A light switch dial.
     """
 
-    name_pattern = re.compile(r"^light_switch_dial(?:_[a-z]+)?_(\d+)$")
+    rule = MatchRule(required={"light", "switch", "dial"}, base_priority=10)
 
 
 # Electronics and Accessories
@@ -536,7 +476,7 @@ class Lamp(Electronics):
     A lamp.
     """
 
-    name_pattern = re.compile(r"^robothor_(?:desk|floor)_lamp_(\w+)?$")
+    rule = MatchRule(required={"lamp"}, forbidden={"desk"})
 
 
 @dataclass(eq=False)
@@ -545,7 +485,7 @@ class Television(Electronics):
     A television.
     """
 
-    name_pattern = re.compile(r"^robothor_television_props_america$")
+    rule = MatchRule(required={"television"}, forbidden={"stand"})
 
 
 @dataclass(eq=False)
@@ -554,7 +494,7 @@ class Laptop(Electronics):
     A laptop.
     """
 
-    name_pattern = re.compile(r"^robothor_laptop_props_america(?:_lid)?$")
+    rule = MatchRule(required={"laptop"}, forbidden={"lid"})
 
 
 @dataclass(eq=False)
@@ -563,7 +503,7 @@ class Cellphone(Electronics):
     A cellphone.
     """
 
-    name_pattern = re.compile(r"^robothor_cellphone_blackberry$")
+    rule = MatchRule(required={"cellphone"})
 
 
 @dataclass(eq=False)
@@ -572,8 +512,8 @@ class AlarmClock(Electronics):
     An alarm clock.
     """
 
-    name_pattern = re.compile(
-        r"^alarm_clock(?:_hand_(?:hour|minute|second))?(?:_button)?(?:_\d+)?$"
+    rule = MatchRule(
+        required={"alarm", "clock"}, forbidden={"button", "minute", "hour"}
     )
 
 
@@ -583,19 +523,16 @@ class Remote(Electronics):
     A remote control.
     """
 
-    name_pattern = re.compile(r"^robothor_remote_coolux$")
+    rule = MatchRule(required={"remote"})
 
 
-# Other objects
 @dataclass(eq=False)
 class WallDecor(HouseholdObject):
     """
     Wall decorations.
     """
 
-    name_pattern = re.compile(
-        r"^robothor_wall_decor(?:_inset)?(?:_poster)?(?:_\d+_\d+)?$"
-    )
+    rule = MatchRule(required={"wall", "decor"})
 
 
 @dataclass(eq=False)
@@ -604,7 +541,7 @@ class WallPanel(HouseholdObject):
     A wall panel.
     """
 
-    name_pattern = re.compile(r"^robothor_wall_panel(?:_\d+_\d+)?(?:_\d+)?$")
+    rule = MatchRule(required={"wall", "panel"})
 
 
 @dataclass(eq=False)
@@ -613,7 +550,7 @@ class Pillow(HouseholdObject):
     A pillow.
     """
 
-    name_pattern = re.compile(r"^robothor_pillow_(\w+)$")
+    rule = MatchRule(required={"pillow"})
 
 
 @dataclass(eq=False)
@@ -622,7 +559,7 @@ class GarbageBin(HouseholdObject):
     A garbage bin.
     """
 
-    name_pattern = re.compile(r"^robothor_garbage_bin_ai2_1$")
+    rule = MatchRule(required={"garbage", "bin"})
 
 
 @dataclass(eq=False)
@@ -631,7 +568,7 @@ class Houseplant(HouseholdObject):
     A houseplant.
     """
 
-    name_pattern = re.compile(r"^robothor_houseplant_\d+$")
+    rule = MatchRule(required={"houseplant"})
 
 
 @dataclass(eq=False)
@@ -640,7 +577,7 @@ class SprayBottle(HouseholdObject):
     A spray bottle.
     """
 
-    name_pattern = re.compile(r"^robothor_spray_bottle_kramig$")
+    rule = MatchRule(required={"spray", "bottle"})
 
 
 @dataclass(eq=False)
@@ -649,7 +586,7 @@ class Vase(HouseholdObject):
     A vase.
     """
 
-    name_pattern = re.compile(r"^robothor_vase_stilren$")
+    rule = MatchRule(required={"vase"})
 
 
 @dataclass(eq=False)
@@ -658,7 +595,13 @@ class Book(HouseholdObject):
     A book.
     """
 
-    name_pattern = re.compile(r"^robothor_book(?:_front)?_(\d+)$")
+    book_front: Optional[BookFront] = None
+    rule = MatchRule(required={"book"}, forbidden={"front"})
+
+
+@dataclass(eq=False)
+class BookFront(HouseholdObject):
+    rule = MatchRule(required={"book", "front"})
 
 
 @dataclass(eq=False)
@@ -667,7 +610,7 @@ class Candle(HouseholdObject):
     A candle.
     """
 
-    name_pattern = re.compile(r"^robothor_candle_glittrig_\d+$")
+    rule = MatchRule(required={"candle"})
 
 
 @dataclass(eq=False)
@@ -676,7 +619,7 @@ class SaltPepperShaker(HouseholdObject):
     A salt and pepper shaker.
     """
 
-    name_pattern = re.compile(r"^robothor_salt_pepper_shaker_bnyd$")
+    rule = MatchRule(required={"salt", "pepper", "shaker"})
 
 
 @dataclass(eq=False)
@@ -685,16 +628,16 @@ class Fork(HouseholdObject):
     A fork.
     """
 
-    name_pattern = re.compile(r"^robothor_fork_ai2_1$")
+    rule = MatchRule(required={"fork"})
 
 
 @dataclass(eq=False)
-class ButterKnife(HouseholdObject):
+class Knife(HouseholdObject):
     """
     A butter knife.
     """
 
-    name_pattern = re.compile(r"^robothor_butter_knife_ai2_1$")
+    rule = MatchRule(required={"knife"})
 
 
 @dataclass(eq=False)

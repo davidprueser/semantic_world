@@ -70,7 +70,7 @@ class Table(View):
     A view that represents a table.
     """
 
-    top: Body
+    body: Body
     """
     The body that represents the table's top surface.
     """
@@ -82,7 +82,7 @@ class Table(View):
         :amount: The number of points to return.
         :returns: A list of points that are on the table.
         """
-        area_of_table = BoundingBoxCollection.from_shapes(self.top.collision)
+        area_of_table = BoundingBoxCollection.from_shapes(self.body.collision)
         event = area_of_table.event
         p = uniform_measure_of_event(event)
         p = p.marginal(SpatialVariables.xy)
@@ -91,7 +91,7 @@ class Table(View):
             (amount, 1), max([b.max_z for b in area_of_table]) + 0.01
         )
         samples = np.concatenate((samples, z_coordinate), axis=1)
-        return [Point3(*s, reference_frame=self.top) for s in samples]
+        return [Point3(*s, reference_frame=self.body) for s in samples]
 
 
 ################################
