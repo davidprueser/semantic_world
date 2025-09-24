@@ -11,7 +11,7 @@
 - Minimize duplication of code
 - Use the semantic_world/doc/styleguide.md for naming transformation variables
 - Do not wrap attribute access in try-except blocks
-- Always access attributes via ".", never via getattr
+- Always access attributes via ".", NEVER use getattr
 - Use existing packages whenever possible
 - Reduce nesting, reduce complexity
 - Use short but descriptive names
@@ -22,6 +22,7 @@
 - Create meaningful custom exceptions
 - Eliminate YAGNI smells
 - Make interfaces hard to misuse
+- Use dataclasses whenever possible
 
 ## Documentation
 - Write docstrings that explain what the function does and not how it does it
