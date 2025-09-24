@@ -16,6 +16,7 @@ from semantic_world.adapters.procthor.procthor_parser import (
     ProcthorObject,
 )
 from semantic_world.spatial_types.spatial_types import TransformationMatrix
+from semantic_world.utils import get_semantic_world_directory_root
 from semantic_world.world_description.geometry import Scale
 from semantic_world.world_description.world_entity import Region
 
@@ -163,8 +164,9 @@ class ProcTHORTestCase(unittest.TestCase):
         door_factory = procthor_door.get_factory()
 
         self.assertEqual(door_factory.name.name, "Doorway_Double_7_room1_room4")
-        self.assertEqual(door_factory.scale, Scale(0.03, 2.0, 2.1))
-        self.assertEqual(door_factory.one_door_scale, Scale(0.03, 1.0, 2.1))
+        self.assertEqual(len(door_factory.door_factories), 2)
+        self.assertEqual(len(door_factory.door_transforms), 2)
+        self.assertEqual(door_factory.door_factories[0].scale, Scale(0.03, 1.0, 2.1))
 
     def test_wall_creation(self):
         parser = ProcTHORParser(self.file_path, None)
@@ -283,6 +285,16 @@ class ProcTHORTestCase(unittest.TestCase):
         world = procthor_object.get_world()
 
         ...
+
+    def test_parse_full_world(self):
+        world = ProcTHORParser(
+            os.path.join(
+                get_semantic_world_directory_root(os.getcwd()),
+                "resources",
+                "procthor_json",
+                "house_987654321.json",
+            )
+        ).parse()
 
 
 if __name__ == "__main__":

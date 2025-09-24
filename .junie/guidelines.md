@@ -29,9 +29,3 @@
 
 ## Misc
 - If you find a package that could be replaced by a more powerful one, let us know
-
-
-
-
-
-

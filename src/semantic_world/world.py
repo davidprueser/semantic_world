@@ -881,14 +881,16 @@ class World:
             self_root = self.root
             other_root = other.root
             with other.modify_world():
-                other_dof = other.degrees_of_freedom.copy()
-                for dof in other_dof:
+                for dof in other.degrees_of_freedom.copy():
                     other.remove_degree_of_freedom(dof)
                     self.add_degree_of_freedom(dof)
                 for connection in other.connections:
                     other.remove_kinematic_structure_entity(connection.parent)
                     other.remove_kinematic_structure_entity(connection.child)
                     self.add_connection(connection, handle_duplicates=handle_duplicates)
+                else:
+                    other.remove_kinematic_structure_entity(other_root)
+                    self.add_kinematic_structure_entity(other_root)
                 for kinematic_structure_entity in other.kinematic_structure_entities:
                     if kinematic_structure_entity._world is not None:
                         other.remove_kinematic_structure_entity(
@@ -898,12 +900,16 @@ class World:
                 other_views = [view for view in other.views]
                 for view in other_views:
                     other.remove_view(view)
-                    self.add_view(view)
+                    self.add_view(view, exists_ok=handle_duplicates)
 
-            connection = root_connection or Connection6DoF(
-                parent=self_root, child=other_root, _world=self
-            )
-            self.add_connection(connection, handle_duplicates=handle_duplicates)
+            connection = root_connection
+            if not connection and self_root:
+                connection = Connection6DoF(
+                    parent=self_root, child=other_root, _world=self
+                )
+
+            if connection:
+                self.add_connection(connection, handle_duplicates=handle_duplicates)
 
     def move_branch(
         self,

@@ -4,6 +4,8 @@ Developer Guide
 ===============
 
 This guide explains how to effectively contribute to the semantic world.
+General code style related guidelines that can also be used for your AI assistant are found in the
+`junie guidelines <https://github.com/cram2/semantic_world/tree/main/.junie/guidelines.md>`_.
 
 Environment Setup
 -----------------

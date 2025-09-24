@@ -48,8 +48,8 @@ def door_factory_from_body(door: Body) -> DoorFactory:
     scale and that a handle can be created with a standard size.
     """
     handle_factory = HandleFactory(
-        PrefixedName(door.name.name + "_handle", door.name.prefix),
-        Scale(0.05, 0.1, 0.02),
+        name=PrefixedName(door.name.name + "_handle", door.name.prefix),
+        scale=Scale(0.05, 0.1, 0.02),
     )
 
     door_factory = DoorFactory(

@@ -243,7 +243,7 @@ def test_behind_and_in_front_of(two_block_world):
 
     pov = TransformationMatrix.from_xyz_rpy(z=5, pitch=-np.pi / 2)
     assert InFrontOf(top, center, pov)()
-    assert Behind(center, top, pov)
+    assert Behind(center, top, pov)()
 
 
 def test_body_in_region(two_block_world):
@@ -303,8 +303,12 @@ def test_is_body_in_gripper(
     test_box.collision = ShapeCollection([box_collision])
 
     # Calculate position between fingers
-    finger1_pos = left_gripper.finger.tip.collision.center_of_mass_in_world()
-    finger2_pos = left_gripper.thumb.tip.collision.center_of_mass_in_world()
+    finger1_pos = (
+        left_gripper.finger.tip.collision.center_of_mass_in_world().to_vector3()
+    )
+    finger2_pos = (
+        left_gripper.thumb.tip.collision.center_of_mass_in_world().to_vector3()
+    )
     between_fingers = (finger1_pos + finger2_pos) / 2.0
 
     # Add box to world

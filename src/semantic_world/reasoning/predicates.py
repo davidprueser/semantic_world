@@ -32,7 +32,8 @@ from ..spatial_computations.ik_solver import (
     UnreachableException,
 )
 from ..spatial_computations.raytracer import RayTracer
-from ..spatial_types.spatial_types import TransformationMatrix
+from ..spatial_types import Vector3
+from ..spatial_types.spatial_types import TransformationMatrix, Point3
 from ..world import World
 from ..world_description.connections import FixedConnection
 from ..world_description.world_entity import Body, Region, KinematicStructureEntity
@@ -413,14 +414,20 @@ class SpatialRelation(Predicate, ABC):
         ref_np = self.point_of_view.to_np()
         front_world = ref_np[:3, index]
         front_norm = front_world / (np.linalg.norm(front_world) + self.eps)
+        front_norm = Vector3(
+            x_init=front_norm[0],
+            y_init=front_norm[1],
+            z_init=front_norm[2],
+            reference_frame=self.point_of_view.reference_frame,
+        )
 
-        s_body = float(
-            np.dot(front_norm, self.body.collision.center_of_mass_in_world())
+        s_body = front_norm.dot(
+            self.body.collision.center_of_mass_in_world().to_vector3()
         )
-        s_other = float(
-            np.dot(front_norm, self.other.collision.center_of_mass_in_world())
+        s_other = front_norm.dot(
+            self.other.collision.center_of_mass_in_world().to_vector3()
         )
-        return s_body - s_other
+        return (s_body - s_other).compile()()
 
 
 class LeftOf(SpatialRelation):

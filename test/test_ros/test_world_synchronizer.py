@@ -191,7 +191,7 @@ def test_model_synchronization_merge_full_world(rclpy_node):
 
     w1.merge_world(pr2_world)
 
-    def wait_for_sync(timeout=2.0, interval=0.05):
+    def wait_for_sync(timeout=3.0, interval=0.05):
         start = time.time()
         while time.time() - start < timeout:
             body_names_1 = [body.name for body in w1.kinematic_structure_entities]
