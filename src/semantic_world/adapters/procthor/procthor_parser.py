@@ -6,7 +6,7 @@ from functools import cached_property
 from typing import Dict, Tuple, Union, Set
 
 import numpy as np
-from entity_query_language import the, entity, let
+from entity_query_language import the, entity, let, symbolic_mode
 from ormatic.eql_interface import eql_to_sql
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import Session
@@ -726,20 +726,23 @@ def get_world_by_asset_id(session: Session, asset_id: str) -> Optional[World]:
     Queries the database for a WorldMapping with the given asset_id provided by the procthor file.
     """
     asset_id = asset_id.lower()
-    expr = the(
-        entity(
-            world := let(type_=WorldMapping),
-            world.name == asset_id,
-        )
-    )
     other_possible_name = "_".join(asset_id.split("_")[:-1])
-    expr2 = the(
-        entity(
-            world := let(type_=WorldMapping),
-            world.name == other_possible_name,
+    with symbolic_mode():
+
+        expr = the(
+            entity(
+                world := let(type_=WorldMapping),
+                world.name == asset_id,
+            )
         )
-    )
-    logging.info(f"Querying name: {asset_id}")
+
+        expr2 = the(
+            entity(
+                world := let(type_=WorldMapping),
+                world.name == other_possible_name,
+            )
+        )
+        logging.info(f"Querying name: {asset_id}")
     try:
         world_mapping = eql_to_sql(expr, session).evaluate()
     except NoResultFound:

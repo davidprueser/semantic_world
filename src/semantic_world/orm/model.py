@@ -1,5 +1,7 @@
 from dataclasses import dataclass, field
 from io import BytesIO
+
+from entity_query_language import symbol
 from typing_extensions import List
 from typing_extensions import Optional
 
@@ -19,6 +21,7 @@ from ..world_description.connections import Connection
 from ..world_description.world_entity import View, KinematicStructureEntity, Body
 
 
+@symbol
 @dataclass
 class WorldMapping(AlternativeMapping[World]):
     kinematic_structure_entities: List[KinematicStructureEntity]

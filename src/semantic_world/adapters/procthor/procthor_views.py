@@ -8,7 +8,7 @@ from typing_extensions import List, Self
 from typing import ClassVar, Optional, Iterable, Tuple, Type, Dict, Set
 import re
 
-from ...views.views import Container, Table
+from ...views.views import Container, Table, Handle
 from ...world import World
 
 # Reuse the common world/view primitives so ProcTHOR views integrate seamlessly.
@@ -47,25 +47,22 @@ class ProcthorResolver:
 
     classes: List[Type[HouseholdObject]]
 
-    def resolve(self, name: str) -> Type[HouseholdObject]:
+    def resolve(self, name: str) -> Optional[Type[HouseholdObject]]:
         # remove all numbers from the name
         name_tokens = set(n.lower() for n in re.sub(r"\d+", "", name).split("_"))
         possible_results = []
         for cls in self.classes:
-            if cls.class_name_tokens().issubset(name_tokens):
-                possible_results.append(cls)
+            matches = cls.class_name_tokens().intersection(name_tokens)
+            possible_results.append((cls, matches))
 
-        if len(possible_results) == 1:
-            return possible_results[0]
-        elif len(possible_results) > 1:
-            possible_results.sort(
-                key=lambda c: len(c.class_name_tokens().intersection(name_tokens))
-            )
-
-            return possible_results[-1]
-
-        else:
-            raise UnresolvedNameError(f"No match found for '{name}'")
+        if len(possible_results) == 0:
+            return None
+        # sort by max number of matches
+        possible_results = sorted(
+            possible_results, key=lambda x: len(x[1]), reverse=True
+        )
+        best_cls, best_matches = possible_results[0]
+        return best_cls
 
 
 @dataclass(eq=False)
@@ -104,10 +101,6 @@ class SoapBottle(Bottle):
 
 
 @dataclass(eq=False)
-class Dumbbell(HouseholdObject): ...
-
-
-@dataclass(eq=False)
 class WineBottle(Bottle):
     """
     A wine bottle.
@@ -115,42 +108,61 @@ class WineBottle(Bottle):
 
 
 @dataclass(eq=False)
-class Cup(Container, HouseholdObject):
+class MustardBottle(Bottle):
+    """
+    A mustard bottle.
+    """
+
+
+@dataclass(eq=False)
+class DrinkingContainer(Container, HouseholdObject): ...
+
+
+@dataclass(eq=False)
+class Cup(DrinkingContainer, HouseholdObject):
     """
     A cup.
     """
 
 
 @dataclass(eq=False)
-class Mug(Container, HouseholdObject):
+class Mug(DrinkingContainer, HouseholdObject):
     """
     A mug.
     """
 
 
 @dataclass(eq=False)
-class Pan(HouseholdObject):
+class CookingContainer(Container, HouseholdObject): ...
+
+
+@dataclass(eq=False)
+class Lid(HouseholdObject): ...
+
+
+@dataclass(eq=False)
+class Pan(CookingContainer):
     """
     A pan.
     """
 
 
 @dataclass(eq=False)
-class PanLid(HouseholdObject):
+class PanLid(Lid):
     """
     A pan lid.
     """
 
 
 @dataclass(eq=False)
-class Pot(HouseholdObject):
+class Pot(CookingContainer):
     """
     A pot.
     """
 
 
 @dataclass(eq=False)
-class PotLid(HouseholdObject):
+class PotLid(Lid):
     """
     A pot lid.
     """
@@ -171,10 +183,23 @@ class Bowl(HouseholdObject):
 
 
 # Food Items
+
+
 @dataclass(eq=False)
-class Produce(HouseholdObject):
+class Food(HouseholdObject): ...
+
+
+@dataclass(eq=False)
+class TunaCan(Food):
     """
-    Abstract class for produce.
+    A tuna can.
+    """
+
+
+@dataclass(eq=False)
+class Produce(Food):
+    """
+    In American English, produce generally refers to fresh fruits and vegetables intended to be eaten by humans.
     """
 
     pass
@@ -208,13 +233,6 @@ class Bread(HouseholdObject):
     """
 
 
-@dataclass(eq=False)
-class FriedEgg(HouseholdObject):
-    """
-    A fried egg.
-    """
-
-
 # Furniture and Fixtures
 @dataclass(eq=False)
 class Furniture(HouseholdObject):
@@ -226,40 +244,28 @@ class Furniture(HouseholdObject):
 
 
 @dataclass(eq=False)
-class CoffeeTable(Table, HouseholdObject):
+class CoffeeTable(Table, Furniture):
     """
     A coffee table.
     """
 
 
 @dataclass(eq=False)
-class DiningTable(Table, HouseholdObject):
+class DiningTable(Table, Furniture):
     """
     A dining table.
     """
 
 
 @dataclass(eq=False)
-class Oven(HouseholdObject): ...
-
-
-@dataclass(eq=False)
-class Egg(Produce): ...
-
-
-@dataclass(eq=False)
-class Toaster(HouseholdObject): ...
-
-
-@dataclass(eq=False)
-class SideTable(Table, HouseholdObject):
+class SideTable(Table, Furniture):
     """
     A side table.
     """
 
 
 @dataclass(eq=False)
-class Desk(Table, HouseholdObject):
+class Desk(Table, Furniture):
     """
     A desk.
     """
@@ -315,21 +321,6 @@ class Sofa(Furniture):
 
 
 @dataclass(eq=False)
-class ToiletPaperHanger(HouseholdObject):
-    """
-    A toilet paper hanger.
-    """
-
-
-@dataclass(eq=False)
-class PaperTowel(HouseholdObject): ...
-
-
-@dataclass(eq=False)
-class Omelette(HouseholdObject): ...
-
-
-@dataclass(eq=False)
 class Sink(HouseholdObject):
     """
     A sink.
@@ -337,94 +328,7 @@ class Sink(HouseholdObject):
 
 
 @dataclass(eq=False)
-class SinkFaucet(HouseholdObject):
-    """
-    A sink faucet.
-    """
-
-
-@dataclass(eq=False)
-class SinkFaucetKnob(HouseholdObject):
-    """
-    A sink faucet knob.
-    """
-
-
-@dataclass(eq=False)
-class Faucet(HouseholdObject):
-    """
-    A standalone faucet.
-    """
-
-
-@dataclass(eq=False)
-class LightSwitch(HouseholdObject):
-    """
-    A light switch.
-    """
-
-
-@dataclass(eq=False)
-class LightSwitchDial(HouseholdObject):
-    """
-    A light switch dial.
-    """
-
-
-# Electronics and Accessories
-@dataclass(eq=False)
-class Electronics(HouseholdObject):
-    """
-    Abstract class for electronics.
-    """
-
-    pass
-
-
-@dataclass(eq=False)
-class Lamp(Electronics):
-    """
-    A lamp.
-    """
-
-
-@dataclass(eq=False)
-class Television(Electronics):
-    """
-    A television.
-    """
-
-
-@dataclass(eq=False)
-class Laptop(Electronics):
-    """
-    A laptop.
-    """
-
-
-@dataclass(eq=False)
-class Cellphone(Electronics):
-    """
-    A cellphone.
-    """
-
-
-@dataclass(eq=False)
-class AlarmClock(Electronics):
-    """
-    An alarm clock.
-    """
-
-
-@dataclass(eq=False)
-class Remote(Electronics):
-    """
-    A remote control.
-    """
-
-
-@dataclass(eq=False)
-class Kettle(Container, HouseholdObject): ...
+class Kettle(CookingContainer): ...
 
 
 @dataclass(eq=False)
@@ -461,18 +365,7 @@ class Potato(Produce): ...
 
 
 @dataclass(eq=False)
-class Pillow(HouseholdObject):
-    """
-    A pillow.
-    """
-
-
-@dataclass(eq=False)
-class Bin(HouseholdObject): ...
-
-
-@dataclass(eq=False)
-class GarbageBin(Bin):
+class GarbageBin(Container, HouseholdObject):
     """
     A garbage bin.
     """
@@ -521,13 +414,6 @@ class BookFront(HouseholdObject): ...
 
 
 @dataclass(eq=False)
-class Candle(HouseholdObject):
-    """
-    A candle.
-    """
-
-
-@dataclass(eq=False)
 class SaltPepperShaker(HouseholdObject):
     """
     A salt and pepper shaker.
@@ -535,17 +421,25 @@ class SaltPepperShaker(HouseholdObject):
 
 
 @dataclass(eq=False)
-class Fork(HouseholdObject):
+class Cuttlery(HouseholdObject): ...
+
+
+@dataclass(eq=False)
+class Fork(Cuttlery):
     """
     A fork.
     """
 
 
 @dataclass(eq=False)
-class Knife(HouseholdObject):
+class Knife(Cuttlery):
     """
     A butter knife.
     """
+
+
+@dataclass(eq=False)
+class Spoon(Cuttlery): ...
 
 
 @dataclass(eq=False)
@@ -563,21 +457,7 @@ class Pen(HouseholdObject):
 
 
 @dataclass(eq=False)
-class TennisRacquet(HouseholdObject):
-    """
-    A tennis racquet.
-    """
-
-
-@dataclass(eq=False)
-class BaseballBat(HouseholdObject):
-    """
-    A baseball bat.
-    """
-
-
-@dataclass(eq=False)
-class Basketball(HouseholdObject):
+class Baseball(HouseholdObject):
     """
     A basketball.
     """
