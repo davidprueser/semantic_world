@@ -7,7 +7,7 @@ import os
 from copy import deepcopy
 from dataclasses import dataclass, field
 from enum import IntEnum
-from functools import wraps, lru_cache
+from functools import wraps, lru_cache, cached_property
 from itertools import combinations_with_replacement
 
 import matplotlib.pyplot as plt
@@ -30,6 +30,8 @@ from typing_extensions import List
 from typing_extensions import Type, Set
 
 from .callbacks.callback import StateChangeCallback, ModelChangeCallback
+from .collision_checking.collision_detector import CollisionDetector
+from .collision_checking.trimesh_collision_detector import TrimeshCollisionDetector
 from .datastructures.prefixed_name import PrefixedName
 from .datastructures.types import NpMatrix4x4
 from .exceptions import (
@@ -42,6 +44,7 @@ from .exceptions import (
 from .robots import AbstractRobot
 from .spatial_computations.forward_kinematics import ForwardKinematicsVisitor
 from .spatial_computations.ik_solver import InverseKinematicsSolver
+from .spatial_computations.raytracer import RayTracer
 from .spatial_types import spatial_types as cas
 from .spatial_types.derivatives import Derivatives
 from .utils import IDGenerator, copy_lru_cache
@@ -375,6 +378,22 @@ class World:
                 dofs.update(set(connection.passive_dofs))
         return dofs
 
+    @cached_property
+    def collision_detector(self) -> CollisionDetector:
+        """
+        A collision detector for the world.
+        :return: A collision detector for the world.
+        """
+        return TrimeshCollisionDetector(self)
+
+    @cached_property
+    def ray_tracer(self) -> RayTracer:
+        """
+        A ray tracer for the world.
+        :return: A ray tracer for the world.
+        """
+        return RayTracer(self)
+
     def validate(self) -> bool:
         """
         Validate the world.
@@ -483,8 +502,8 @@ class World:
         for model changes.
         """
         if not self.world_is_being_modified:
-            self.clear_all_lru_caches()
             self.compile_forward_kinematics_expressions()
+            self.clear_all_lru_caches()
             self.notify_state_change()
             self._model_version += 1
 

@@ -8,7 +8,7 @@ from typing_extensions import Tuple
 import pytest
 
 from .adapters.urdf import URDFParser
-from .utils import rclpy_installed
+from .utils import rclpy_installed, tracy_installed
 from .world_description.connections import (
     Connection6DoF,
     PrismaticConnection,
@@ -173,6 +173,29 @@ def pr2_world():
 
     return world
 
+@pytest.fixture
+def tracy_world():
+    if not tracy_installed():
+        pytest.skip("Tracy not installed")
+    urdf_dir = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "..", "..", "resources", "urdf"
+    )
+    tracy = os.path.join(urdf_dir, "tracy.urdf")
+    world = World()
+    with world.modify_world():
+        localization_body = Body(name=PrefixedName("odom_combined"))
+        world.add_kinematic_structure_entity(localization_body)
+
+        tracy_parser = URDFParser.from_file(file_path=tracy)
+        world_with_tracy = tracy_parser.parse()
+        # world_with_tracy.plot_kinematic_structure()
+        tracy_root = world_with_tracy.root
+        c_root_bf = Connection6DoF(
+            parent=localization_body, child=tracy_root, _world=world
+        )
+        world.merge_world(world_with_tracy, c_root_bf)
+
+    return world
 
 @pytest.fixture
 def apartment_world() -> World:

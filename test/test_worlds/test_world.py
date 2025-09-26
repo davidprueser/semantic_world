@@ -592,6 +592,16 @@ def test_copy_pr2_world(pr2_world):
     pr2_copy = deepcopy(pr2_world)
 
 
+def test_copy_pr2_world_connection_origin(pr2_world):
+    pr2_world.notify_state_change()
+    pr2_copy = deepcopy(pr2_world)
+
+    for body in pr2_world.bodies:
+        pr2_body = pr2_world.get_kinematic_structure_entity_by_name(body.name)
+        pr2_copy_body = pr2_copy.get_kinematic_structure_entity_by_name(body.name)
+        np.testing.assert_array_almost_equal(pr2_body.global_pose.to_np(), pr2_copy_body.global_pose.to_np())
+
+
 def test_world_different_entities(world_setup):
     world, l1, l2, bf, r1, r2 = world_setup
     world_copy = deepcopy(world)
