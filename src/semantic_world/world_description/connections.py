@@ -2,16 +2,16 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing_extensions import List, TYPE_CHECKING, Union
 
 import numpy as np
+from typing_extensions import List, TYPE_CHECKING, Union
 
-from .. import spatial_types as cas
 from .degree_of_freedom import DegreeOfFreedom
-from ..datastructures.prefixed_name import PrefixedName
-from ..spatial_types.derivatives import DerivativeMap
-from ..datastructures.types import NpMatrix4x4
 from .world_entity import CollisionCheckingConfig, Connection
+from .. import spatial_types as cas
+from ..datastructures.prefixed_name import PrefixedName
+from ..datastructures.types import NpMatrix4x4
+from ..spatial_types.derivatives import DerivativeMap
 
 if TYPE_CHECKING:
     from ..world import World
@@ -165,8 +165,8 @@ class ActiveConnection1DOF(ActiveConnection, Has1DOFState, ABC):
     Degree of freedom to control movement along the axis.
     """
 
-    def __post_init__(self):
-        super().__post_init__()
+    def add_to_world(self, world: World):
+        super().add_to_world(world)
         if self.multiplier is None:
             self.multiplier = 1
         else:
@@ -206,8 +206,8 @@ class PrismaticConnection(ActiveConnection1DOF):
     Allows translation along an axis.
     """
 
-    def __post_init__(self):
-        super().__post_init__()
+    def add_to_world(self, world: World):
+        super().add_to_world(world)
 
         motor_expression = self.dof.symbols.position * self.multiplier + self.offset
         translation_axis = self.axis * motor_expression
@@ -228,8 +228,8 @@ class RevoluteConnection(ActiveConnection1DOF):
     Allows rotation about an axis.
     """
 
-    def __post_init__(self):
-        super().__post_init__()
+    def add_to_world(self, world: World):
+        super().add_to_world(world)
 
         motor_expression = self.dof.symbols.position * self.multiplier + self.offset
         parent_R_child = cas.RotationMatrix.from_axis_angle(self.axis, motor_expression)
@@ -274,8 +274,8 @@ class Connection6DoF(PassiveConnection):
     def __hash__(self):
         return hash(self.name)
 
-    def __post_init__(self):
-        super().__post_init__()
+    def add_to_world(self, world: World):
+        super().add_to_world(world)
         self._post_init_world_part()
         parent_P_child = cas.Point3(
             x_init=self.x.symbols.position,
@@ -366,8 +366,8 @@ class OmniDrive(ActiveConnection, PassiveConnection, HasUpdateState):
     translation_velocity_limits: float = field(default=0.6)
     rotation_velocity_limits: float = field(default=0.5)
 
-    def __post_init__(self):
-        super().__post_init__()
+    def add_to_world(self, world: World):
+        super().add_to_world(world)
         self._post_init_world_part()
         odom_T_bf = cas.TransformationMatrix.from_xyz_rpy(
             x=self.x.symbols.position,

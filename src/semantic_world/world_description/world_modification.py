@@ -140,8 +140,7 @@ class AddConnectionModification(WorldModelModification):
         return cls(ConnectionFactory.from_connection(kwargs["connection"]))
 
     def apply(self, world: World):
-        connection = self.connection_factory.create(world)
-        world.add_connection(connection)
+        self.connection_factory.create(world)
 
     def to_json(self):
         return {
