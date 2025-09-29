@@ -23,7 +23,7 @@ from ...views.factories import (
     DoorFactory,
     RoomFactory,
     WallFactory,
-    HandleFactory,
+    OuterHandleFactory,
     Direction,
     DoubleDoorFactory,
 )
@@ -140,13 +140,13 @@ class ProcthorDoor:
             door_factory = DoubleDoorFactory(
                 name=self.name,
                 scale=self.scale,
-                handle_factory=HandleFactory(name=handle_name),
+                handle_factory=OuterHandleFactory(name=handle_name),
             )
         else:
             door_factory = DoorFactory(
                 name=self.name,
                 scale=self.scale,
-                handle_factory=HandleFactory(name=handle_name),
+                handle_factory=OuterHandleFactory(name=handle_name),
                 handle_direction=Direction.Y,
             )
 
