@@ -45,14 +45,14 @@ class UnresolvedNameError(ValueError):
 class ProcthorResolver:
     """Central resolver that deterministically maps a ProcTHOR name to exactly one class."""
 
-    classes: List[Type[HouseholdObject]]
+    classes: List[Type[HouseholdObject]] = field(default_factory=list)
 
     def resolve(self, name: str) -> Optional[Type[HouseholdObject]]:
         # remove all numbers from the name
         name_tokens = set(n.lower() for n in re.sub(r"\d+", "", name).split("_"))
         possible_results = []
         for cls in self.classes:
-            matches = cls.class_name_tokens().intersection(name_tokens)
+            matches = cls.class_name_tokens().intersection(name_tokens) or cls.additional_names.intersection(name_tokens)
             possible_results.append((cls, matches))
 
         if len(possible_results) == 0:
@@ -75,6 +75,11 @@ class HouseholdObject(View, ABC):
     """
 
     body: Body
+
+    additional_names: Set[str]
+    """
+    Additional names that can be used to match this object.
+    """
 
     @classmethod
     @lru_cache(maxsize=None)
@@ -197,6 +202,42 @@ class TunaCan(Food):
 
 
 @dataclass(eq=False)
+class Bread(Food):
+    """
+    Bread.
+    """
+    additional_names = {"bumpybread", "whitebread", "loafbread", "honeybread", "grainbread"}
+
+
+@dataclass(eq=False)
+class CheezeIt(Food):
+    """
+    Some type of cracker.
+    """
+
+
+@dataclass(eq=False)
+class Pringles(Food):
+    """
+    Pringles chips
+    """
+
+
+@dataclass(eq=False)
+class GelatinBox(Food):
+    """
+    Gelatin box.
+    """
+
+
+@dataclass(eq=False)
+class TomatoSoup(Food):
+    """
+    Tomato soup.
+    """
+
+
+@dataclass(eq=False)
 class Produce(Food):
     """
     In American English, produce generally refers to fresh fruits and vegetables intended to be eaten by humans.
@@ -227,9 +268,16 @@ class Apple(Produce):
 
 
 @dataclass(eq=False)
-class Bread(HouseholdObject):
+class Banana(Produce):
     """
-    Bread.
+    A banana.
+    """
+
+
+@dataclass(eq=False)
+class Orange(Produce):
+    """
+    An orange.
     """
 
 
@@ -459,7 +507,7 @@ class Pen(HouseholdObject):
 @dataclass(eq=False)
 class Baseball(HouseholdObject):
     """
-    A basketball.
+    A baseball.
     """
 
 

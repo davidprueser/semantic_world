@@ -15,6 +15,7 @@ from semantic_world.adapters.procthor.procthor_parser import (
     ProcthorWall,
     ProcthorObject,
 )
+from semantic_world.adapters.procthor.procthor_views import ProcthorResolver, Bread
 from semantic_world.spatial_types.spatial_types import TransformationMatrix
 from semantic_world.utils import get_semantic_world_directory_root
 from semantic_world.world_description.geometry import Scale
@@ -295,6 +296,16 @@ class ProcTHORTestCase(unittest.TestCase):
                 "house_987654321.json",
             )
         ).parse()
+
+    def test_procthor_views(self):
+        """
+        Simple test case to check that the ProcthorResolver works correctly with the additional_names attribute.
+        """
+        resolver = ProcthorResolver()
+        resolver.classes = [Bread]
+
+        resolved_string = resolver.resolve("whitebread_a_slice_8_mesh")
+        self.assertEqual(Bread, resolved_string)
 
 
 if __name__ == "__main__":
