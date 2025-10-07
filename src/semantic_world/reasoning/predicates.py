@@ -407,6 +407,8 @@ class ViewDependentSpatialRelation(SpatialRelation, ABC):
     A small value to avoid division by zero.
     """
 
+    spatial_relation_result: bool = False
+
     def _signed_distance_along_direction(self, index: int) -> float:
         """
         Calculate the spatial relation between self.body and self.other with respect to a given
@@ -445,7 +447,8 @@ class LeftOf(ViewDependentSpatialRelation):
     """
 
     def __call__(self) -> bool:
-        return self._signed_distance_along_direction(1) > 0.0
+        self.spatial_relation_result = self._signed_distance_along_direction(1) > 0.0
+        return self.spatial_relation_result
 
 
 @dataclass
@@ -455,7 +458,8 @@ class RightOf(ViewDependentSpatialRelation):
     """
 
     def __call__(self) -> bool:
-        return self._signed_distance_along_direction(1) < 0.0
+        self.spatial_relation_result = self._signed_distance_along_direction(1) < 0.0
+        return self.spatial_relation_result
 
 
 @dataclass
@@ -465,7 +469,8 @@ class Above(ViewDependentSpatialRelation):
     """
 
     def __call__(self) -> bool:
-        return self._signed_distance_along_direction(2) > 0.0
+        self.spatial_relation_result = self._signed_distance_along_direction(2) > 0.0
+        return self.spatial_relation_result
 
 
 @dataclass
@@ -475,7 +480,8 @@ class Below(ViewDependentSpatialRelation):
     """
 
     def __call__(self) -> bool:
-        return self._signed_distance_along_direction(2) < 0.0
+        self.spatial_relation_result = self._signed_distance_along_direction(2) < 0.0
+        return self.spatial_relation_result
 
 
 @dataclass
@@ -485,7 +491,8 @@ class Behind(ViewDependentSpatialRelation):
     """
 
     def __call__(self) -> bool:
-        return self._signed_distance_along_direction(0) < 0.0
+        self.spatial_relation_result = self._signed_distance_along_direction(0) < 0.0
+        return self.spatial_relation_result
 
 
 @dataclass
@@ -495,24 +502,29 @@ class InFrontOf(ViewDependentSpatialRelation):
     """
 
     def __call__(self) -> bool:
-        return self._signed_distance_along_direction(0) > 0.0
+        self.result = self._signed_distance_along_direction(0) > 0.0
+        return self.result
 
 
 @dataclass
 class InsideOf(SpatialRelation):
     """
-    The "inside of" direction is defined as the +X axis of the given point of view.
+    The "inside of" relation is defined as the fraction of the volume of self.body
+    that lies within the bounding box of self.other.
     """
 
-    def __call__(self) -> bool:
-        return self.compute_containment_ratio()
+    containment_ratio: float = 0.0
+
+    def __call__(self) -> float:
+        self.containment_ratio = self.compute_containment_ratio() or 0.0
+        return self.containment_ratio
 
     def compute_containment_ratio(self):
         """
         Compute the containment ratio of self.body inside self.other.
         """
         if not self.other.collision:
-            return False
+            return None
 
         # Get meshes in their local (body) frames
         mesh_a_local = self.body.collision.combined_mesh
@@ -520,7 +532,7 @@ class InsideOf(SpatialRelation):
 
         # Check if either mesh is empty
         if mesh_a_local.is_empty or mesh_b_local.is_empty:
-            return False
+            return None
 
         # Transform meshes from body frame to world frame
         mesh_a = mesh_a_local.copy()
@@ -533,7 +545,7 @@ class InsideOf(SpatialRelation):
         mesh_b_bbox = mesh_b.bounding_box
 
         if not mesh_b_bbox.is_watertight:
-            return False
+            return None
 
         inside = mesh_b_bbox.contains(mesh_a.vertices)
         return sum(inside) / len(inside)
