@@ -8,7 +8,9 @@ from ormatic.utils import classes_of_module, recursive_subclasses
 import semantic_world.world_description.degree_of_freedom
 import semantic_world.robots
 import semantic_world.views.views
+import semantic_world.reasoning.predicates
 import semantic_world.world_description.world_entity
+from semantic_world.adapters.procthor.procthor_views import HouseholdObject
 from semantic_world.world import (
     ResetStateContextManager,
     WorldModelUpdateContextManager,
@@ -43,7 +45,8 @@ classes |= set(classes_of_module(semantic_world.world_description.connections))
 classes |= set(classes_of_module(semantic_world.views.views))
 classes |= set(classes_of_module(semantic_world.world_description.degree_of_freedom))
 classes |= set(classes_of_module(semantic_world.robots))
-# classes |= set(recursive_subclasses(ViewFactory))
+classes |= set([HouseholdObject]+recursive_subclasses(HouseholdObject))
+classes |= set(classes_of_module(semantic_world.reasoning.predicates))
 
 # remove classes that should not be mapped
 classes -= {
