@@ -99,8 +99,6 @@ class VizMarkerPublisher(StateChangeCallback):
                         b=float(collision.color.B),
                         a=float(collision.color.A),
                     )
-                    if isinstance(collision, Primitive)
-                    else ColorRGBA(r=1.0, g=1.0, b=1.0, a=1.0)
                 )
                 msg.lifetime = Duration(sec=100)
 

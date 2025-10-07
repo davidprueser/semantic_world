@@ -8,8 +8,7 @@ from typing_extensions import List, Self
 from typing import ClassVar, Optional, Iterable, Tuple, Type, Dict, Set
 import re
 
-from ...views.views import Container, Table, Handle
-from ...world import World
+from ...views.views import Furniture, Table, Container
 
 # Reuse the common world/view primitives so ProcTHOR views integrate seamlessly.
 from ...world_description.world_entity import View, Body, Region
@@ -52,7 +51,7 @@ class ProcthorResolver:
         name_tokens = set(n.lower() for n in re.sub(r"\d+", "", name).split("_"))
         possible_results = []
         for cls in self.classes:
-            matches = cls.class_name_tokens().intersection(name_tokens) or cls.additional_names.intersection(name_tokens)
+            matches = cls.class_name_tokens().intersection(name_tokens) or cls._additional_names.intersection(name_tokens)
             possible_results.append((cls, matches))
 
         if len(possible_results) == 0:
@@ -61,6 +60,10 @@ class ProcthorResolver:
         possible_results = sorted(
             possible_results, key=lambda x: len(x[1]), reverse=True
         )
+
+        # if there are no matches, don't choose a class
+        if len(possible_results[0][1]) == 0:
+            return None
         best_cls, best_matches = possible_results[0]
         return best_cls
 
@@ -76,7 +79,7 @@ class HouseholdObject(View, ABC):
 
     body: Body
 
-    additional_names: Set[str]
+    _additional_names: ClassVar[Set[str]] = set()
     """
     Additional names that can be used to match this object.
     """
@@ -206,7 +209,7 @@ class Bread(Food):
     """
     Bread.
     """
-    additional_names = {"bumpybread", "whitebread", "loafbread", "honeybread", "grainbread"}
+    _additional_names = {"bumpybread", "whitebread", "loafbread", "honeybread", "grainbread"}
 
 
 @dataclass(eq=False)
@@ -281,46 +284,36 @@ class Orange(Produce):
     """
 
 
-# Furniture and Fixtures
 @dataclass(eq=False)
-class Furniture(HouseholdObject):
-    """
-    Abstract class for furniture.
-    """
-
-    pass
-
-
-@dataclass(eq=False)
-class CoffeeTable(Table, Furniture):
+class CoffeeTable(Table, Furniture, HouseholdObject):
     """
     A coffee table.
     """
 
 
 @dataclass(eq=False)
-class DiningTable(Table, Furniture):
+class DiningTable(Table, Furniture, HouseholdObject):
     """
     A dining table.
     """
 
 
 @dataclass(eq=False)
-class SideTable(Table, Furniture):
+class SideTable(Table, Furniture, HouseholdObject):
     """
     A side table.
     """
 
 
 @dataclass(eq=False)
-class Desk(Table, Furniture):
+class Desk(Table, Furniture, HouseholdObject):
     """
     A desk.
     """
 
 
 @dataclass(eq=False)
-class Chair(Furniture):
+class Chair(Furniture, HouseholdObject):
     """
     Abstract class for chairs.
     """
@@ -341,28 +334,21 @@ class Armchair(Chair):
 
 
 @dataclass(eq=False)
-class ShelvingUnit(Furniture):
+class ShelvingUnit(Furniture, HouseholdObject):
     """
     A shelving unit.
     """
 
 
 @dataclass(eq=False)
-class Dresser(Furniture):
-    """
-    A dresser.
-    """
-
-
-@dataclass(eq=False)
-class Bed(Furniture):
+class ProcthorBed(Furniture, HouseholdObject):
     """
     A bed.
     """
 
 
 @dataclass(eq=False)
-class Sofa(Furniture):
+class Sofa(Furniture, HouseholdObject):
     """
     A sofa.
     """
@@ -424,7 +410,7 @@ class Drone(HouseholdObject): ...
 
 
 @dataclass(eq=False)
-class Box(Container, HouseholdObject): ...
+class ProcthorBox(Container, HouseholdObject): ...
 
 
 @dataclass(eq=False)
