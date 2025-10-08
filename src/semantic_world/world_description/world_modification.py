@@ -46,6 +46,8 @@ class WorldModelModification(SubclassJSONSerializer, ABC):
     """
     A record of a modification to the model (structure) of the world.
     This includes add/remove body and add/remove connection.
+
+    All modifications are compared via the names of the objects they reference.
     """
 
     @abstractmethod
@@ -93,6 +95,12 @@ class AddKinematicStructureEntityModification(WorldModelModification):
     def _from_json(cls, data: Dict[str, Any]) -> Self:
         return cls(
             kinematic_structure_entity=KinematicStructureEntity.from_json(data["body"])
+        )
+
+    def __eq__(self, other: Any) -> bool:
+        return (
+            self.kinematic_structure_entity.name
+            == other.kinematic_structure_entity.name
         )
 
 
@@ -154,6 +162,12 @@ class AddConnectionModification(WorldModelModification):
             connection_factory=ConnectionFactory.from_json(data["connection_factory"])
         )
 
+    def __eq__(self, other):
+        return (
+            isinstance(other, AddConnectionModification)
+            and self.connection_factory.name == other.connection_factory.name
+        )
+
 
 @dataclass
 class RemoveConnectionModification(WorldModelModification):
@@ -211,6 +225,9 @@ class AddDegreeOfFreedomModification(WorldModelModification):
     @classmethod
     def _from_json(cls, data: Dict[str, Any]) -> Self:
         return cls(dof=DegreeOfFreedom.from_json(data["dof"]))
+
+    def __eq__(self, other):
+        return self.dof.name == other.dof.name
 
 
 @dataclass

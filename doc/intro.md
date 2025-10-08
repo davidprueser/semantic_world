@@ -13,10 +13,12 @@ Whether for research prototypes or robust data pipelines,
 Semantic World translates raw environment data into structured knowledge.
 
 ## Assimilated Technologies
+
 ```{raw} html
 <div style="display: flex; flex-direction: row; align-items: center; gap: 30px;">
   <div style="flex: 1; max-width: 70%;">
-    <img src="_static/images/assimilation.png" alt="Assimilation Icon" style="width: 100%; height: auto; object-fit: contain;">
+    <img src="_static/images/assimilation.png" alt="Assimilation Icon" class="only-light" style="width: 100%; height: auto; object-fit: contain;">
+    <img src="_static/images/assimilation_dark_mode.png" alt="Assimilation Icon" class="only-dark" style="width: 100%; height: auto; object-fit: contain;">
   </div>
   <div style="flex: 2; display: flex; flex-direction: column; gap: 1em;">
     <p>🌍 <b>Model full kinematic worlds, not just meshes</b>. Define bodies, regions, connections, and degrees of freedom as primary, first-class entities within a clean, composable Python API.</p>
