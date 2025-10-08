@@ -47,7 +47,7 @@ class ConnectionFactory(HasGeneric[T], SubclassJSONSerializer, ABC):
 
     @classmethod
     def from_connection(cls, connection: Connection) -> Self:
-        for factory in recursive_subclasses(cls):
+        for factory in recursive_subclasses(cls) + [cls]:
             if factory.original_class() == connection.__class__:
                 return factory._from_connection(connection)
         raise ValueError(f"Unknown connection type: {connection.name}")

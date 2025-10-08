@@ -376,7 +376,7 @@ def is_body_in_region(body: Body, region: Region) -> float:
     return intersection.volume / body_volume
 
 
-@dataclass
+@dataclass(frozen=True)
 class SpatialRelation(Predicate, ABC):
     """
     Check if the body is spatially related to the other body if you are looking from the point of view.

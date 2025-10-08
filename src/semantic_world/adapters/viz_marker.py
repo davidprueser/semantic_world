@@ -27,7 +27,6 @@ from ..world_description.geometry import (
     Box,
     Sphere,
     Cylinder,
-    Primitive,
     TriangleMesh,
 )
 from ..world import World

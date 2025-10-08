@@ -41,7 +41,7 @@ sphinx:
     html_static_path: ["_static"]
     html_theme_options:
       logo:
-        image_light: "_staitc/images/semantic_world_logo.png"
+        image_light: "_static/images/semantic_world_logo.png"
         image_dark: "_static/images/semantic_world_logo_dark_mode.png"
 
 
@@ -56,3 +56,4 @@ repository:
 html:
   use_issues_button: true
   use_repository_button: true
+  extra_css: ["_static/custom.css"]
