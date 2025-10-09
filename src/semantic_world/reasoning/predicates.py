@@ -516,15 +516,15 @@ class InsideOf(SpatialRelation):
     containment_ratio: float = 0.0
 
     def __call__(self) -> float:
-        self.containment_ratio = self.compute_containment_ratio() or 0.0
+        self.containment_ratio = self.compute_containment_ratio()
         return self.containment_ratio
 
-    def compute_containment_ratio(self):
+    def compute_containment_ratio(self) -> float:
         """
         Compute the containment ratio of self.body inside self.other.
         """
         if not self.other.collision:
-            return None
+            return 0.0
 
         # Get meshes in their local (body) frames
         mesh_a_local = self.body.collision.combined_mesh
@@ -532,7 +532,7 @@ class InsideOf(SpatialRelation):
 
         # Check if either mesh is empty
         if mesh_a_local.is_empty or mesh_b_local.is_empty:
-            return None
+            return 0.0
 
         # Transform meshes from body frame to world frame
         mesh_a = mesh_a_local.copy()
@@ -545,8 +545,10 @@ class InsideOf(SpatialRelation):
         mesh_b_bbox = mesh_b.bounding_box
 
         if not mesh_b_bbox.is_watertight:
-            return None
+            return 0.0
 
         inside = mesh_b_bbox.contains(mesh_a.vertices)
+        if inside == 0:
+            return 0.0
         return sum(inside) / len(inside)
 
