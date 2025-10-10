@@ -25,7 +25,7 @@ from ..views.views import (
     Wall,
     DoubleDoor,
     Room,
-    Floor,
+    FloorSurface, DrawerSurface,
 )
 from ..world import World
 from ..world_description.connections import (
@@ -678,7 +678,7 @@ class DoubleDoorFactory(ViewFactory[DoubleDoor], HasDoorFactories):
             right_door, left_door = door_views[0], door_views[1]
 
         double_door_view = DoubleDoor(
-            body=double_door_body, left_door=left_door, right_door=right_door
+            body=double_door_body, doors=[left_door, right_door]
         )
         world.add_view(double_door_view)
         return world
@@ -710,13 +710,62 @@ class DrawerFactory(ViewFactory[Drawer], HasHandleFactory):
         self.add_handle_to_world(drawer_T_handle, world)
 
         container_view: Container = world.get_views_by_type(Container)[0]
+        container_body = container_view.body
+
+        drawer_surface_region = self._create_region(container_body)
+        connection = FixedConnection(
+            parent=container_body,
+            child=drawer_surface_region,
+            origin_expression=TransformationMatrix(),
+        )
+        world.add_connection(connection)
+
+        drawer_surface_view = DrawerSurface(
+            name=PrefixedName(f"{self.name.name}_surface"),
+            region=drawer_surface_region,
+        )
+        world.add_view(drawer_surface_view)
+
         handle_view: Handle = world.get_views_by_type(Handle)[0]
         drawer_view = Drawer(
-            name=self.name, container=container_view, handle=handle_view
+            name=self.name,
+            container=container_view,
+            handle=handle_view,
+            drawer_surface=drawer_surface_view,
         )
         world.add_view(drawer_view)
 
         return world
+
+    def _create_region(self, container_body: Body) -> Region:
+        scale = self.container_factory.scale
+        wall_thickness = self.container_factory.wall_thickness
+
+        inner_x = scale.x - wall_thickness
+        inner_y = scale.y - wall_thickness
+        inner_z = scale.z - wall_thickness
+
+        # Interior bottom plane z
+        z_bottom = -inner_z / 2.0
+
+        # Along X, the drawer is open towards +X, so the interior surface extends to +scale.x/2
+        x_min = -inner_x / 2.0
+        x_max = inner_x / 2.0
+
+        # Along Y, interior is bounded by side walls
+        y_min = -inner_y / 2.0
+        y_max = inner_y / 2.0
+
+        points = [
+            Point3(x_min, y_min, z_bottom, reference_frame=container_body),
+            Point3(x_max, y_min, z_bottom, reference_frame=container_body),
+            Point3(x_max, y_max, z_bottom, reference_frame=container_body),
+            Point3(x_min, y_max, z_bottom, reference_frame=container_body),
+        ]
+
+        return Region.from_3d_points(
+            name=PrefixedName(f"{self.name.name}_surface_region"), points_3d=points, reference_frame=container_body
+        )
 
 
 @dataclass
@@ -861,7 +910,7 @@ class RoomFactory(ViewFactory[Room]):
 
         region = Region.from_3d_points(
             points_3d=self.floor_polytope,
-            name=PrefixedName(self.name.name + "_region", self.name.prefix),
+            name=PrefixedName(self.name.name + "_surface_region", self.name.prefix),
             reference_frame=room_body,
         )
         connection = FixedConnection(
@@ -871,8 +920,8 @@ class RoomFactory(ViewFactory[Room]):
         )
         world.add_connection(connection)
 
-        floor = Floor(
-            name=PrefixedName(self.name.name + "_floor", self.name.prefix),
+        floor = FloorSurface(
+            name=PrefixedName(self.name.name + "_floor_surface", self.name.prefix),
             region=region,
         )
         world.add_view(floor)

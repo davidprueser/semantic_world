@@ -8,49 +8,14 @@ from probabilistic_model.probabilistic_circuit.rx.helper import uniform_measure_
 from typing_extensions import List
 
 from ..world_description.shape_collection import BoundingBoxCollection
-from ..datastructures.prefixed_name import PrefixedName
 from ..spatial_types import Point3
 from ..datastructures.variables import SpatialVariables
 from ..world_description.world_entity import View, Body, Region
 
 
-@dataclass(eq=False)
-class HasDrawers:
-    """
-    A mixin class for views that have drawers.
-    """
-
-    drawers: List[Drawer] = field(default_factory=list, hash=False)
-
-
-@dataclass(eq=False)
-class HasDoors:
-    """
-    A mixin class for views that have doors.
-    """
-
-    doors: List[Door] = field(default_factory=list, hash=False)
-
-
-@symbol
-@dataclass(eq=False)
-class Handle(View):
-    body: Body
-
-
 @symbol
 @dataclass(eq=False)
 class Container(View):
-    body: Body
-
-
-@dataclass(eq=False)
-class Door(View):  # Door has a Footprint
-    """
-    Door in a body that has a Handle and can open towards or away from the user.
-    """
-
-    handle: Handle
     body: Body
 
 
@@ -61,7 +26,7 @@ class Fridge(View):
     """
 
     body: Body
-    door: Door
+    doors: List[Door] = field(default_factory=list)
 
 
 @dataclass(eq=False)
@@ -73,6 +38,11 @@ class Table(View):
     body: Body
     """
     The body that represents the table's top surface.
+    """
+
+    table_top_surface: TableTopSurface
+    """
+    The table's top surface.
     """
 
     def points_on_table(self, amount: int = 100) -> List[Point3]:
@@ -94,6 +64,40 @@ class Table(View):
         return [Point3(*s, reference_frame=self.body) for s in samples]
 
 
+@dataclass(eq=False)
+class Room(View):
+    """
+    A view that represents a closed area with a specific purpose
+    """
+
+    floor: FloorSurface
+    """
+    The room's floor.
+    """
+
+
+@dataclass(eq=False)
+class Wall(View):
+    body: Body
+    """
+    The body that represents the wall.
+    """
+
+    doors: List[Door] = field(default_factory=list)
+    """
+    The doors that are possibly in the wall.
+    """
+
+
+@symbol
+@dataclass(eq=False)
+class Handle(View):
+    body: Body
+    """
+    The body that the handle is attached to.
+    """
+
+
 ################################
 
 
@@ -103,18 +107,6 @@ class Components(View): ...
 
 @dataclass(eq=False)
 class Furniture(View): ...
-
-
-@dataclass(eq=False)
-class SupportingSurface(View):
-    """
-    A view that represents a supporting surface.
-    """
-
-    region: Region
-    """
-    The region that represents the supporting surface.
-    """
 
 
 #################### subclasses von Components
@@ -131,15 +123,8 @@ class Door(EntryWay):
 
 
 @dataclass(eq=False)
-class Fridge(View):
-    body: Body
-    door: Door
-
-
-@dataclass(eq=False)
 class DoubleDoor(EntryWay):
-    left_door: Door
-    right_door: Door
+    doors: List[Door] = field(default_factory=list, hash=False)
 
 
 @symbol
@@ -147,6 +132,7 @@ class DoubleDoor(EntryWay):
 class Drawer(Components):
     container: Container
     handle: Handle
+    drawer_surface: DrawerSurface
 
 
 ############################### subclasses to Furniture
@@ -173,22 +159,32 @@ class Wardrobe(Cupboard):
     doors: List[Door] = field(default_factory=list)
 
 
-class Floor(SupportingSurface): ...
+############################### supporting surfaces
+
+@dataclass(eq=False)
+class SupportingSurface(View):
+    """
+    A view that represents a supporting surface.
+    """
+
+    region: Region
+    """
+    The region that represents the supporting surface.
+    """
 
 
 @dataclass(eq=False)
-class Room(View):
-    """
-    A view that represents a closed area with a specific purpose
-    """
-
-    floor: Floor
-    """
-    The room's floor.
-    """
+class TableTopSurface(SupportingSurface): ...
 
 
 @dataclass(eq=False)
-class Wall(View):
-    body: Body
-    doors: List[Door] = field(default_factory=list)
+class SofaSurface(SupportingSurface): ...
+
+
+@dataclass(eq=False)
+class FloorSurface(SupportingSurface): ...
+
+
+@dataclass(eq=False)
+class DrawerSurface(SupportingSurface): ...
+

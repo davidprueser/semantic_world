@@ -8,7 +8,7 @@ from typing_extensions import List, Self
 from typing import ClassVar, Optional, Iterable, Tuple, Type, Dict, Set
 import re
 
-from ...views.views import Furniture, Table, Container
+from ...views.views import Furniture, Table, Container, SupportingSurface
 
 # Reuse the common world/view primitives so ProcTHOR views integrate seamlessly.
 from ...world_description.world_entity import View, Body, Region
@@ -127,14 +127,14 @@ class DrinkingContainer(Container, HouseholdObject): ...
 
 
 @dataclass(eq=False)
-class Cup(DrinkingContainer, HouseholdObject):
+class Cup(DrinkingContainer):
     """
     A cup.
     """
 
 
 @dataclass(eq=False)
-class Mug(DrinkingContainer, HouseholdObject):
+class Mug(DrinkingContainer):
     """
     A mug.
     """
@@ -181,6 +181,7 @@ class Plate(HouseholdObject):
     """
     A plate.
     """
+    plate_surface: PlateSurface
 
 
 @dataclass(eq=False)
@@ -188,11 +189,10 @@ class Bowl(HouseholdObject):
     """
     A bowl.
     """
+    bowl_surface: BowlSurface
 
 
 # Food Items
-
-
 @dataclass(eq=False)
 class Food(HouseholdObject): ...
 
@@ -338,13 +338,16 @@ class ShelvingUnit(Furniture, HouseholdObject):
     """
     A shelving unit.
     """
+    shelve_surfaces: List[ShelveSurface] = field(default_factory=list)
 
 
 @dataclass(eq=False)
-class ProcthorBed(Furniture, HouseholdObject):
+class Bed(Furniture, HouseholdObject):
     """
     A bed.
     """
+
+    bed_surface: BedSurface
 
 
 @dataclass(eq=False)
@@ -502,3 +505,22 @@ class LiquidCap(HouseholdObject):
     """
     A liquid cap.
     """
+
+
+############################ supporting surfaces
+
+@dataclass(eq=False)
+class PlateSurface(SupportingSurface): ...
+
+
+@dataclass(eq=False)
+class BowlSurface(SupportingSurface): ...
+
+
+@dataclass(eq=False)
+class ShelveSurface(SupportingSurface): ...
+
+
+@dataclass(eq=False)
+class BedSurface(SupportingSurface): ...
+
