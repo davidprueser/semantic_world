@@ -1,16 +1,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from functools import cached_property
 
-import numpy as np
 from entity_query_language import symbol
 from probabilistic_model.probabilistic_circuit.rx.helper import uniform_measure_of_event
 from typing_extensions import List
 
-from ..world_description.shape_collection import BoundingBoxCollection
+from ..datastructures.prefixed_name import PrefixedName
+from ..world_description.shape_collection import BoundingBoxCollection, ShapeCollection
 from ..spatial_types import Point3
 from ..datastructures.variables import SpatialVariables
 from ..world_description.world_entity import View, Body, Region
+import numpy as np
 
 
 @symbol
@@ -132,7 +134,53 @@ class DoubleDoor(EntryWay):
 class Drawer(Components):
     container: Container
     handle: Handle
-    drawer_surface: DrawerSurface
+
+    def get_adaptive_area_threshold(self, mesh, multiplier=8.0):
+        areas = mesh.area_faces
+        median_area = np.median(areas)
+        return median_area * multiplier
+
+    @cached_property
+    def drawer_surface(self):
+        mesh = self.container.body.collision.combined_mesh
+
+        # Compute surface normals and areas
+        normals = mesh.face_normals
+        areas = mesh.area_faces
+
+        # select faces that are pointing up
+        upward_mask = normals[:, 2] > 0.90
+
+        # define threshold for area size
+        large_mask = areas > self.get_adaptive_area_threshold(mesh)
+
+        # combine up facing and large enough areas
+        candidate_mask = upward_mask & large_mask
+
+        # get the submesh of candidates
+        candidates = mesh.submesh([candidate_mask], append=True)
+
+        # use rays to ensure that the area above the surface is not occupied
+        face_centers = mesh.triangles_center[candidate_mask]
+        ray_origins = face_centers + np.array([0, 0, 0.01])  # slightly above surface
+        ray_dirs = np.tile([0, 0, 1], (len(ray_origins), 1))  # cast upward
+
+        # intersection
+        locations, index_ray, index_tri = mesh.ray.intersects_location(
+            ray_origins=ray_origins,
+            ray_directions=ray_dirs
+        )
+
+        # Compute distances to nearest hit (if any)
+        distances = np.full(len(ray_origins), np.inf)
+        distances[index_ray] = np.linalg.norm(
+            locations - ray_origins[index_ray], axis=1
+        )
+
+        shape = ShapeCollection([candidates])
+        drawer_surface_region = Region(name=PrefixedName(f"{self.name.name}_surface_region"), area=shape)
+        drawer_surface_region.mesh = candidates
+        return drawer_surface_region
 
 
 ############################### subclasses to Furniture
