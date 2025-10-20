@@ -169,7 +169,7 @@ def test_generated_views(kitchen_world):
 def test_apartment_views(apartment_world):
     world_reasoner = WorldReasoner(apartment_world)
     world_reasoner.fit_views(
-        [Handle, Container, Drawer, Cabinet],
+        [DrawerSurface, Handle, Container, Drawer, Cabinet],
         world_factory=lambda: apartment_world,
         scenario=None,
     )
@@ -178,7 +178,11 @@ def test_apartment_views(apartment_world):
     drawer_container_names = [
         v.body.name.name for v in found_views if isinstance(v, Container)
     ]
+    drawer_surfaces = [
+        v.drawer_surface for v in found_views if isinstance(v, Drawer)
+    ]
     assert len(drawer_container_names) == 19
+    assert len(drawer_surfaces) == 19
 
 
 def fit_rules_and_assert_views(world, view_type, update_existing_views, scenario):

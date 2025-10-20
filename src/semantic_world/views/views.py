@@ -2,11 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from functools import cached_property
-
 from entity_query_language import symbol
 from probabilistic_model.probabilistic_circuit.rx.helper import uniform_measure_of_event
+from random_events.interval import SimpleInterval
 from typing_extensions import List
-
 from ..datastructures.prefixed_name import PrefixedName
 from ..world_description.shape_collection import BoundingBoxCollection, ShapeCollection
 from ..spatial_types import Point3
@@ -135,30 +134,43 @@ class Drawer(Components):
     container: Container
     handle: Handle
 
-    def get_adaptive_area_threshold(self, mesh, multiplier=8.0):
-        areas = mesh.area_faces
-        median_area = np.median(areas)
-        return median_area * multiplier
-
     @cached_property
     def drawer_surface(self):
+        """
+        Create a region that represents the drawer's surface.
+        """
         mesh = self.container.body.collision.combined_mesh
 
-        # Compute surface normals and areas
+        # Compute surface normals
         normals = mesh.face_normals
-        areas = mesh.area_faces
 
         # select faces that are pointing up
-        upward_mask = normals[:, 2] > 0.90
+        upward_mask = normals[:, 2] > 0.95
 
-        # define threshold for area size
-        large_mask = areas > self.get_adaptive_area_threshold(mesh)
+        face_centers = mesh.triangles_center
+        # map upward mask to face centers
+        combined = np.column_stack((face_centers, upward_mask.astype(float)))
 
-        # combine up facing and large enough areas
-        candidate_mask = upward_mask & large_mask
+        # All z axis positions that are upward
+        z_positions = combined[:, :-1][combined[:, 3].astype(bool)]
 
-        # get the submesh of candidates
-        candidates = mesh.submesh([candidate_mask], append=True)
+        # Find lowest upward facing triangles, use tolerance of 0.05
+        lowest_surface = min(z_positions[:, 2])
+        lowest_surface_tolerance = 0.05
+        acceptable_interval = SimpleInterval(lowest_surface + (lowest_surface * lowest_surface_tolerance),
+                                             lowest_surface - (lowest_surface * lowest_surface_tolerance))
+
+        # create a mask of all z positions that are within the tolerance of the lowest upward facing triangles
+        z_position_mask = np.array([acceptable_interval.contains(z) for z in z_positions[:, 2]])
+        # map position mask to face centers
+        z_position_combined = np.column_stack((z_positions, z_position_mask.astype(float)))
+
+        for s in z_position_combined:
+            mask = np.all(combined[:, :3] == s[:3], axis=1)
+            combined[mask, -1] = s[-1]
+
+        # select faces that are pointing up and have a z position within tolerance
+        candidate_mask = np.array([upward and z_pos for upward, z_pos in combined[:, -2:].astype(bool)])
 
         # use rays to ensure that the area above the surface is not occupied
         face_centers = mesh.triangles_center[candidate_mask]
@@ -171,15 +183,29 @@ class Drawer(Components):
             ray_directions=ray_dirs
         )
 
-        # Compute distances to nearest hit (if any)
-        distances = np.full(len(ray_origins), np.inf)
-        distances[index_ray] = np.linalg.norm(
-            locations - ray_origins[index_ray], axis=1
-        )
+        # Define minimum required clearance above surface
+        clearance_threshold = 0.1
 
-        shape = ShapeCollection([candidates])
-        drawer_surface_region = Region(name=PrefixedName(f"{self.name.name}_surface_region"), area=shape)
-        drawer_surface_region.mesh = candidates
+        # Compute distances to next object above in ray
+        distances = np.full(len(ray_origins), np.inf)
+        distances[index_ray] = np.linalg.norm(locations - ray_origins[index_ray], axis=1)
+
+        # Faces that have enough vertical clearance
+        clear_mask = distances > clearance_threshold
+
+        # Combine with candidate mask
+        final_mask = np.zeros(len(candidate_mask), dtype=bool)
+        final_mask[candidate_mask] = clear_mask
+
+        # Extract the final submesh
+        if not final_mask.any():
+            raise ValueError("No candidate faces found or candidates are not clear.")
+        final_candidates = mesh.submesh([final_mask], append=True)
+
+        points_3d = [Point3(x, y, z, reference_frame=self.container.body) for x, y, z in final_candidates.vertices]
+        drawer_surface_region = Region.from_3d_points(name=PrefixedName(f"{self.name.name}_surface_region"),
+                                                      points_3d=points_3d,
+                                                      reference_frame=self.container.body)
         return drawer_surface_region
 
 
