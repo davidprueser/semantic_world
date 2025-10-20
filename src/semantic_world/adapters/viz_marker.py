@@ -91,11 +91,13 @@ class VizMarkerPublisher(StateChangeCallback):
                         @ collision.origin
                     ).to_np()
                 )
-                msg.color = ColorRGBA(
-                    r=float(collision.color.R),
-                    g=float(collision.color.G),
-                    b=float(collision.color.B),
-                    a=float(collision.color.A),
+                msg.color = (
+                    ColorRGBA(
+                        r=float(collision.color.R),
+                        g=float(collision.color.G),
+                        b=float(collision.color.B),
+                        a=float(collision.color.A),
+                    )
                 )
                 msg.lifetime = Duration(sec=100)
 

@@ -6,7 +6,7 @@ import time
 
 import tqdm
 from ormatic.dao import to_dao
-from ormatic.utils import drop_database
+from ormatic.utils import drop_database, recursive_subclasses
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from typing_extensions import TYPE_CHECKING
@@ -15,6 +15,7 @@ from semantic_world.adapters.fbx import FBXParser
 from semantic_world.adapters.procthor.procthor_pipelines import (
     dresser_factory_from_body,
 )
+from semantic_world.adapters.procthor.procthor_views import ProcthorResolver, HouseholdObject
 from semantic_world.orm.ormatic_interface import *
 from semantic_world.pipeline.pipeline import (
     Pipeline,
@@ -101,6 +102,11 @@ def parse_fbx_file_to_world_mapping_daos(fbx_file_path: str) -> List[WorldMappin
     worlds = remove_root_and_move_children_into_new_worlds(world)
 
     worlds = replace_dresser_meshes_with_factories(worlds, dresser_pattern)
+    resolver = ProcthorResolver(*[recursive_subclasses(HouseholdObject)])
+    for world in worlds:
+        resolved = resolver.resolve(world.name)
+        if resolved:
+            world.add_view(resolved(body=world.root))
 
     return [to_dao(world) for world in worlds]
 
@@ -144,7 +150,7 @@ def parse_procthor_files_and_save_to_database(
         if not any([e in f for e in excluded_words]) and fbx_file_pattern.fullmatch(f)
     ]
     # Create database engine and session
-    engine = create_engine(f"mysql+pymysql://{semantic_world_database_uri}")
+    engine = create_engine(f"{semantic_world_database_uri}")
     session = Session(engine)
 
     if drop_existing_database:

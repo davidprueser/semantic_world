@@ -376,7 +376,7 @@ def is_body_in_region(body: Body, region: Region) -> float:
     return intersection.volume / body_volume
 
 
-@dataclass(frozen=True)
+@dataclass
 class SpatialRelation(Predicate, ABC):
     """
     Check if the body is spatially related to the other body if you are looking from the point of view.
@@ -393,11 +393,21 @@ class SpatialRelation(Predicate, ABC):
     The other body.
      """
 
+
+@dataclass
+class ViewDependentSpatialRelation(SpatialRelation, ABC):
+
     point_of_view: TransformationMatrix
     """
     The reference spot from where to look at the bodies.
     """
+
     eps: float = 1e-12
+    """
+    A small value to avoid division by zero.
+    """
+
+    spatial_relation_result: bool = False
 
     def _signed_distance_along_direction(self, index: int) -> float:
         """
@@ -430,55 +440,115 @@ class SpatialRelation(Predicate, ABC):
         return (s_body - s_other).compile()()
 
 
-class LeftOf(SpatialRelation):
+@dataclass
+class LeftOf(ViewDependentSpatialRelation):
     """
     The "left" direction is taken as the -Y axis of the given point of view.
     """
 
     def __call__(self) -> bool:
-        return self._signed_distance_along_direction(1) > 0.0
+        self.spatial_relation_result = self._signed_distance_along_direction(1) > 0.0
+        return self.spatial_relation_result
 
 
-class RightOf(SpatialRelation):
+@dataclass
+class RightOf(ViewDependentSpatialRelation):
     """
     The "right" direction is taken as the +Y axis of the given point of view.
     """
 
     def __call__(self) -> bool:
-        return self._signed_distance_along_direction(1) < 0.0
+        self.spatial_relation_result = self._signed_distance_along_direction(1) < 0.0
+        return self.spatial_relation_result
 
 
-class Above(SpatialRelation):
+@dataclass
+class Above(ViewDependentSpatialRelation):
     """
     The "above" direction is taken as the +Z axis of the given point of view.
     """
 
     def __call__(self) -> bool:
-        return self._signed_distance_along_direction(2) > 0.0
+        self.spatial_relation_result = self._signed_distance_along_direction(2) > 0.0
+        return self.spatial_relation_result
 
 
-class Below(SpatialRelation):
+@dataclass
+class Below(ViewDependentSpatialRelation):
     """
     The "below" direction is taken as the -Z axis of the given point of view.
     """
 
     def __call__(self) -> bool:
-        return self._signed_distance_along_direction(2) < 0.0
+        self.spatial_relation_result = self._signed_distance_along_direction(2) < 0.0
+        return self.spatial_relation_result
 
 
-class Behind(SpatialRelation):
+@dataclass
+class Behind(ViewDependentSpatialRelation):
     """
     The "behind" direction is defined as the -X axis of the given point of view.
     """
 
     def __call__(self) -> bool:
-        return self._signed_distance_along_direction(0) < 0.0
+        self.spatial_relation_result = self._signed_distance_along_direction(0) < 0.0
+        return self.spatial_relation_result
 
 
-class InFrontOf(SpatialRelation):
+@dataclass
+class InFrontOf(ViewDependentSpatialRelation):
     """
     The "in front of" direction is defined as the +X axis of the given point of view.
     """
 
     def __call__(self) -> bool:
-        return self._signed_distance_along_direction(0) > 0.0
+        self.result = self._signed_distance_along_direction(0) > 0.0
+        return self.result
+
+
+@dataclass
+class InsideOf(SpatialRelation):
+    """
+    The "inside of" relation is defined as the fraction of the volume of self.body
+    that lies within the bounding box of self.other.
+    """
+
+    containment_ratio: float = 0.0
+
+    def __call__(self) -> float:
+        self.containment_ratio = self.compute_containment_ratio()
+        return self.containment_ratio
+
+    def compute_containment_ratio(self) -> float:
+        """
+        Compute the containment ratio of self.body inside self.other.
+        """
+        if not self.other.collision:
+            return 0.0
+
+        # Get meshes in their local (body) frames
+        mesh_a_local = self.body.collision.combined_mesh
+        mesh_b_local = self.other.collision.combined_mesh
+
+        # Check if either mesh is empty
+        if mesh_a_local.is_empty or mesh_b_local.is_empty:
+            return 0.0
+
+        # Transform meshes from body frame to world frame
+        mesh_a = mesh_a_local.copy()
+        mesh_a.apply_transform(self.body.global_pose.to_np())
+
+        mesh_b = mesh_b_local.copy()
+        mesh_b.apply_transform(self.other.global_pose.to_np())
+
+        # Use bounding box of mesh_b to check if mesh_a is inside mesh_b
+        mesh_b_bbox = mesh_b.bounding_box
+
+        if not mesh_b_bbox.is_watertight:
+            return 0.0
+
+        inside = mesh_b_bbox.contains(mesh_a.vertices)
+        if inside == 0:
+            return 0.0
+        return sum(inside) / len(inside)
+

@@ -25,7 +25,7 @@ from ..views.views import (
     Wall,
     DoubleDoor,
     Room,
-    Floor,
+    FloorSurface, DrawerSurface,
 )
 from ..world import World
 from ..world_description.connections import (
@@ -678,7 +678,7 @@ class DoubleDoorFactory(ViewFactory[DoubleDoor], HasDoorFactories):
             right_door, left_door = door_views[0], door_views[1]
 
         double_door_view = DoubleDoor(
-            body=double_door_body, left_door=left_door, right_door=right_door
+            body=double_door_body, doors=[left_door, right_door]
         )
         world.add_view(double_door_view)
         return world
@@ -712,7 +712,9 @@ class DrawerFactory(ViewFactory[Drawer], HasHandleFactory):
         container_view: Container = world.get_views_by_type(Container)[0]
         handle_view: Handle = world.get_views_by_type(Handle)[0]
         drawer_view = Drawer(
-            name=self.name, container=container_view, handle=handle_view
+            name=self.name,
+            container=container_view,
+            handle=handle_view,
         )
         world.add_view(drawer_view)
 
@@ -861,7 +863,7 @@ class RoomFactory(ViewFactory[Room]):
 
         region = Region.from_3d_points(
             points_3d=self.floor_polytope,
-            name=PrefixedName(self.name.name + "_region", self.name.prefix),
+            name=PrefixedName(self.name.name + "_surface_region", self.name.prefix),
             reference_frame=room_body,
         )
         connection = FixedConnection(
@@ -871,8 +873,8 @@ class RoomFactory(ViewFactory[Room]):
         )
         world.add_connection(connection)
 
-        floor = Floor(
-            name=PrefixedName(self.name.name + "_floor", self.name.prefix),
+        floor = FloorSurface(
+            name=PrefixedName(self.name.name + "_floor_surface", self.name.prefix),
             region=region,
         )
         world.add_view(floor)

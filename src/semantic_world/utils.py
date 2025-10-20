@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import os
-from contextlib import suppress
 from copy import deepcopy
+from dataclasses import dataclass
 from functools import lru_cache, wraps
-from typing_extensions import Any, Tuple, Iterable
+import trimesh
+from typing_extensions import Any, Tuple
 from xml.etree import ElementTree as ET
 import weakref
-from sqlalchemy import Engine, inspect, text, MetaData
 
 
 class IDGenerator:
@@ -172,3 +172,29 @@ def get_semantic_world_directory_root(file_path: str) -> str:
     raise ValueError(
         f"Could not find pyproject.toml in any parent directory of {file_path}"
     )
+
+
+@dataclass
+class VisualizeTrimesh:
+    """
+    Visualize the collision of an object in the world, based on the geometry and colors added to the scene. .
+    """
+
+    def __post_init__(self):
+        self.scene = trimesh.Scene()
+
+    def visualize(self, viewer=None, **kwargs):
+        """
+        Visualize the scene, based on the geometry and colors added to the scene.
+        :param viewer: The viewer to use for visualization.
+        """
+        self.scene.show(viewer=viewer, **kwargs)
+
+    def add_mesh(self, mesh: trimesh.Trimesh, color: Tuple[int, int, int, int] = (255, 255, 255, 255)):
+        """
+        Add geometry to the scene.
+        :param mesh: The geometry to add.
+        :param color: The color of the geometry.
+        """
+        mesh.visual.face_colors = color
+        self.scene.add_geometry(mesh)
