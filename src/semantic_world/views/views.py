@@ -7,6 +7,7 @@ from probabilistic_model.probabilistic_circuit.rx.helper import uniform_measure_
 from random_events.interval import SimpleInterval
 from typing_extensions import List
 from ..datastructures.prefixed_name import PrefixedName
+from ..utils import VisualizeTrimesh
 from ..world_description.shape_collection import BoundingBoxCollection, ShapeCollection
 from ..spatial_types import Point3
 from ..datastructures.variables import SpatialVariables
@@ -140,72 +141,73 @@ class Drawer(Components):
         Create a region that represents the drawer's surface.
         """
         mesh = self.container.body.collision.combined_mesh
+        upward_threshold = 0.99
+        height_tolerance = 0.005
+        clearance_threshold = 0.5
 
-        # Compute surface normals
+        # --- Find upward-facing faces ---
         normals = mesh.face_normals
-
-        # select faces that are pointing up
-        upward_mask = normals[:, 2] > 0.95
+        upward_mask = normals[:, 2] > upward_threshold
 
         face_centers = mesh.triangles_center
-        # map upward mask to face centers
-        combined = np.column_stack((face_centers, upward_mask.astype(float)))
+        z_values = face_centers[:, 2]
 
-        # All z axis positions that are upward
-        z_positions = combined[:, :-1][combined[:, 3].astype(bool)]
+        # --- Find the lowest upward-facing surface ---
+        if not upward_mask.any():
+            raise ValueError("No upward-facing faces found.")
 
-        # Find lowest upward facing triangles, use tolerance of 0.05
-        lowest_surface = min(z_positions[:, 2])
-        lowest_surface_tolerance = 0.05
-        acceptable_interval = SimpleInterval(lowest_surface + (lowest_surface * lowest_surface_tolerance),
-                                             lowest_surface - (lowest_surface * lowest_surface_tolerance))
+        lowest_surface = np.min(z_values[upward_mask])
 
-        # create a mask of all z positions that are within the tolerance of the lowest upward facing triangles
-        z_position_mask = np.array([acceptable_interval.contains(z) for z in z_positions[:, 2]])
-        # map position mask to face centers
-        z_position_combined = np.column_stack((z_positions, z_position_mask.astype(float)))
+        low = lowest_surface - height_tolerance
+        high = lowest_surface + height_tolerance
+        acceptable_height = SimpleInterval(low, high)
 
-        for s in z_position_combined:
-            mask = np.all(combined[:, :3] == s[:3], axis=1)
-            combined[mask, -1] = s[-1]
+        # Select faces that are both upward and near the lowest surface
+        in_tolerance_mask = np.array([acceptable_height.contains(value) for value in z_values])
+        candidate_mask = upward_mask & in_tolerance_mask
 
-        # select faces that are pointing up and have a z position within tolerance
-        candidate_mask = np.array([upward and z_pos for upward, z_pos in combined[:, -2:].astype(bool)])
+        if not candidate_mask.any():
+            raise ValueError("No upward-facing faces within height tolerance.")
 
-        # use rays to ensure that the area above the surface is not occupied
-        face_centers = mesh.triangles_center[candidate_mask]
-        ray_origins = face_centers + np.array([0, 0, 0.01])  # slightly above surface
-        ray_dirs = np.tile([0, 0, 1], (len(ray_origins), 1))  # cast upward
+        # --- Check vertical clearance using ray casting ---
+        face_centers = face_centers[candidate_mask]
+        ray_origins = face_centers + np.array([0, 0, 0.01])  # small upward offset
+        ray_dirs = np.tile([0, 0, 1], (len(ray_origins), 1))
 
-        # intersection
-        locations, index_ray, index_tri = mesh.ray.intersects_location(
+        locations, index_ray, _ = mesh.ray.intersects_location(
             ray_origins=ray_origins,
             ray_directions=ray_dirs
         )
 
-        # Define minimum required clearance above surface
-        clearance_threshold = 0.1
-
-        # Compute distances to next object above in ray
+        # Compute distances to intersections (if any)
         distances = np.full(len(ray_origins), np.inf)
         distances[index_ray] = np.linalg.norm(locations - ray_origins[index_ray], axis=1)
 
-        # Faces that have enough vertical clearance
-        clear_mask = distances > clearance_threshold
+        # Filter faces with enough space above
+        clear_mask = (distances > clearance_threshold) | np.isinf(distances)
 
-        # Combine with candidate mask
-        final_mask = np.zeros(len(candidate_mask), dtype=bool)
-        final_mask[candidate_mask] = clear_mask
+        # --- Apply clearance mask back to the full mesh ---
+        final_mask = np.zeros(len(mesh.faces), dtype=bool)
+        candidate_indices = np.nonzero(candidate_mask)[0]
+        final_mask[candidate_indices[clear_mask]] = True
 
-        # Extract the final submesh
         if not final_mask.any():
-            raise ValueError("No candidate faces found or candidates are not clear.")
-        final_candidates = mesh.submesh([final_mask], append=True)
+            raise ValueError("No candidate faces with sufficient clearance found.")
 
-        points_3d = [Point3(x, y, z, reference_frame=self.container.body) for x, y, z in final_candidates.vertices]
-        drawer_surface_region = Region.from_3d_points(name=PrefixedName(f"{self.name.name}_surface_region"),
-                                                      points_3d=points_3d,
-                                                      reference_frame=self.container.body)
+        # --- Build the submesh and region ---
+        candidates = mesh.submesh([final_mask], append=True)
+
+        points_3d = [
+            Point3(x, y, z, reference_frame=self.container.body)
+            for x, y, z in candidates.vertices
+        ]
+
+        drawer_surface_region = Region.from_3d_points(
+            name=PrefixedName(f"{self.name.name}_surface_region"),
+            points_3d=points_3d,
+            reference_frame=self.container.body
+        )
+
         return drawer_surface_region
 
 
