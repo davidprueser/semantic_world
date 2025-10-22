@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from functools import cached_property
+from typing import Optional
+
 from entity_query_language import symbol
 from probabilistic_model.probabilistic_circuit.rx.helper import uniform_measure_of_event
 from random_events.interval import SimpleInterval
@@ -42,7 +44,7 @@ class Table(View):
     The body that represents the table's top surface.
     """
 
-    table_top_surface: TableTopSurface
+    table_top_surface: Optional[TableTopSurface] = None
     """
     The table's top surface.
     """
@@ -163,7 +165,9 @@ class Drawer(Components):
         acceptable_height = SimpleInterval(low, high)
 
         # Select faces that are both upward and near the lowest surface
-        in_tolerance_mask = np.array([acceptable_height.contains(value) for value in z_values])
+        in_tolerance_mask = np.array(
+            [acceptable_height.contains(value) for value in z_values]
+        )
         candidate_mask = upward_mask & in_tolerance_mask
 
         if not candidate_mask.any():
@@ -175,13 +179,14 @@ class Drawer(Components):
         ray_dirs = np.tile([0, 0, 1], (len(ray_origins), 1))
 
         locations, index_ray, _ = mesh.ray.intersects_location(
-            ray_origins=ray_origins,
-            ray_directions=ray_dirs
+            ray_origins=ray_origins, ray_directions=ray_dirs
         )
 
         # Compute distances to intersections (if any)
         distances = np.full(len(ray_origins), np.inf)
-        distances[index_ray] = np.linalg.norm(locations - ray_origins[index_ray], axis=1)
+        distances[index_ray] = np.linalg.norm(
+            locations - ray_origins[index_ray], axis=1
+        )
 
         # Filter faces with enough space above
         clear_mask = (distances > clearance_threshold) | np.isinf(distances)
@@ -205,7 +210,7 @@ class Drawer(Components):
         drawer_surface_region = Region.from_3d_points(
             name=PrefixedName(f"{self.name.name}_surface_region"),
             points_3d=points_3d,
-            reference_frame=self.container.body
+            reference_frame=self.container.body,
         )
 
         return drawer_surface_region
@@ -237,6 +242,7 @@ class Wardrobe(Cupboard):
 
 ############################### supporting surfaces
 
+
 @dataclass(eq=False)
 class SupportingSurface(View):
     """
@@ -263,4 +269,3 @@ class FloorSurface(SupportingSurface): ...
 
 @dataclass(eq=False)
 class DrawerSurface(SupportingSurface): ...
-

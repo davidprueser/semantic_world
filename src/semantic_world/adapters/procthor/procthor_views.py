@@ -51,7 +51,9 @@ class ProcthorResolver:
         name_tokens = set(n.lower() for n in re.sub(r"\d+", "", name).split("_"))
         possible_results = []
         for cls in self.classes:
-            matches = cls.class_name_tokens().intersection(name_tokens) or cls._additional_names.intersection(name_tokens)
+            matches = cls.class_name_tokens().intersection(
+                name_tokens
+            ) or cls._additional_names.intersection(name_tokens)
             possible_results.append((cls, matches))
 
         if len(possible_results) == 0:
@@ -181,7 +183,8 @@ class Plate(HouseholdObject):
     """
     A plate.
     """
-    plate_surface: PlateSurface
+
+    plate_surface: Optional[PlateSurface] = None
 
 
 @dataclass(eq=False)
@@ -189,7 +192,8 @@ class Bowl(HouseholdObject):
     """
     A bowl.
     """
-    bowl_surface: BowlSurface
+
+    bowl_surface: Optional[BowlSurface] = None
 
 
 # Food Items
@@ -209,7 +213,14 @@ class Bread(Food):
     """
     Bread.
     """
-    _additional_names = {"bumpybread", "whitebread", "loafbread", "honeybread", "grainbread"}
+
+    _additional_names = {
+        "bumpybread",
+        "whitebread",
+        "loafbread",
+        "honeybread",
+        "grainbread",
+    }
 
 
 @dataclass(eq=False)
@@ -338,6 +349,7 @@ class ShelvingUnit(Furniture, HouseholdObject):
     """
     A shelving unit.
     """
+
     shelve_surfaces: List[ShelveSurface] = field(default_factory=list)
 
 
@@ -347,7 +359,7 @@ class Bed(Furniture, HouseholdObject):
     A bed.
     """
 
-    bed_surface: BedSurface
+    bed_surface: Optional[BedSurface] = None
 
 
 @dataclass(eq=False)
@@ -509,6 +521,7 @@ class LiquidCap(HouseholdObject):
 
 ############################ supporting surfaces
 
+
 @dataclass(eq=False)
 class PlateSurface(SupportingSurface): ...
 
@@ -523,4 +536,3 @@ class ShelveSurface(SupportingSurface): ...
 
 @dataclass(eq=False)
 class BedSurface(SupportingSurface): ...
-

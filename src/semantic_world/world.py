@@ -911,7 +911,9 @@ class World:
                     self.add_connection(connection, handle_duplicates=handle_duplicates)
                 else:
                     other.remove_kinematic_structure_entity(other_root)
-                    self.add_kinematic_structure_entity(other_root)
+                    self.add_kinematic_structure_entity(
+                        other_root, handle_duplicates=handle_duplicates
+                    )
                 for kinematic_structure_entity in other.kinematic_structure_entities:
                     if kinematic_structure_entity._world is not None:
                         other.remove_kinematic_structure_entity(

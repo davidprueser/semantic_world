@@ -3,7 +3,8 @@ import logging
 import math
 from dataclasses import dataclass, field
 from functools import cached_property
-from typing import Dict, Tuple, Union, Set
+from pathlib import Path
+from typing import Dict, Tuple, Union, Set, Any, Self
 
 import numpy as np
 from entity_query_language import the, entity, let, symbolic_mode
@@ -490,7 +491,9 @@ class ProcthorObject:
                     child=child_world.root,
                     origin_expression=obj_T_child,
                 )
-                body_world.merge_world(child_world, child_connection, handle_duplicates=True)
+                body_world.merge_world(
+                    child_world, child_connection, handle_duplicates=True
+                )
 
             return body_world
 
@@ -536,15 +539,25 @@ class ProcTHORParser:
     Parses a Procthor JSON file into a semantic digital twin World.
     """
 
-    file_path: str
+    name: str
     """
-    File path to the Procthor JSON file.
+    The name of the world that is extracted from the house."""
+
+    house: Dict[str, Any]
+    """
+    The house as JSON.
     """
 
     session: Optional[Session] = field(default=None)
     """
     SQLAlchemy session to interact with the database to import objects.
     """
+
+    @classmethod
+    def from_file(cls, file_path: str, session: Optional[Session] = None) -> Self:
+        return cls(
+            name=Path(file_path).stem, house=json.load(open(file_path)), session=session
+        )
 
     def parse(self) -> World:
         """
@@ -553,23 +566,21 @@ class ProcTHORParser:
         Walls and doors are constructed from the supplied polygons
         Objects are imported from the database
         """
-        with open(self.file_path) as f:
-            house = json.load(f)
-        house_name = self.file_path.split("/")[-1].split(".")[0]
 
+        house_name = self.name
         world = World(name=house_name)
         with world.modify_world():
             world_root = Body(name=PrefixedName(house_name))
             world.add_kinematic_structure_entity(world_root, handle_duplicates=True)
 
-            self.import_rooms(world, house["rooms"])
+            self.import_rooms(world, self.house["rooms"])
 
             if self.session is not None:
-                self.import_objects(world, house["objects"])
+                self.import_objects(world, self.house["objects"])
             else:
                 logging.warning("No database session provided, skipping object import.")
 
-            self.import_walls_and_doors(world, house["walls"], house["doors"])
+            self.import_walls_and_doors(world, self.house["walls"], self.house["doors"])
 
             return world
 
@@ -598,11 +609,13 @@ class ProcTHORParser:
         :param world: The World instance to which the objects will be added.
         :param objects: List of object dictionaries from the Procthor JSON file.
         """
-        for obj in objects:
+        for index, obj in enumerate(objects):
             procthor_object = ProcthorObject(object_dict=obj, session=self.session)
             obj_world = procthor_object.get_world()
             if obj_world is None:
                 continue
+            # for kse in obj_world.kinematic_structure_entities:
+            #     kse.name.name += f"_{id(obj)}"
             obj_connection = FixedConnection(
                 parent=world.root,
                 child=obj_world.root,

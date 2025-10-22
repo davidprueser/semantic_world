@@ -1,26 +1,45 @@
+import itertools
 import os
+from io import BytesIO, StringIO
 from pathlib import Path
 import tqdm
 from ormatic.dao import to_dao
 from ormatic.utils import recursive_subclasses, drop_database
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
+import prior
 
 from semantic_world.adapters.procthor.procthor_parser import ProcTHORParser
-from semantic_world.adapters.procthor.procthor_views import ProcthorResolver, HouseholdObject
+from semantic_world.adapters.procthor.procthor_views import (
+    ProcthorResolver,
+    HouseholdObject,
+)
+from semantic_world.orm.ormatic_interface import *
 from semantic_world.reasoning.predicates import InsideOf
 
 
 def parse_procthor_worlds_and_calculate_containment_ratio():
-    database_uri = os.environ.get("SEMANTIC_WORLD_DATABASE_URI")
-    engine = create_engine(database_uri, echo=False)
-    session = Session(engine)
+    semantic_world_database_uri = os.environ.get("SEMANTIC_WORLD_DATABASE_URI")
+    semantic_world_engine = create_engine(semantic_world_database_uri, echo=False)
+    semantic_world_session = Session(semantic_world_engine)
 
-    json_directory = "../resources/procthor_json"
+    procthor_experiments_database_uri = os.environ.get(
+        "PROCTHOR_EXPERIMENTS_DATABASE_URI"
+    )
+    procthor_experiments_engine = create_engine(
+        procthor_experiments_database_uri, echo=False
+    )
+    drop_database(procthor_experiments_engine)
+    Base.metadata.create_all(procthor_experiments_engine)
+    procthor_experiments_session = Session(procthor_experiments_engine)
+
+    dataset = prior.load_dataset("procthor-10k")
 
     # Iterate through all JSON files in the directory
-    for json_file in Path(json_directory).glob("*.json"):
-        parser = ProcTHORParser(str(json_file), session)
+    for index, house in enumerate(
+        tqdm.tqdm(dataset["train"], desc="Parsing Procthor worlds")
+    ):
+        parser = ProcTHORParser(f"house_{index}", house, semantic_world_session)
         world = parser.parse()
 
         # resolve views
@@ -34,23 +53,17 @@ def parse_procthor_worlds_and_calculate_containment_ratio():
         daos = []
 
         world_dao = to_dao(world, memo=memo)
-        session.add(world_dao)
+        procthor_experiments_session.add(world_dao)
 
-        pbar = tqdm.tqdm(world.bodies)
-        containments = 0
-        pbar.set_postfix({"containments": containments})
-        for body in pbar:
-            for other in world.bodies:
-                if body != other:
-                    is_inside = InsideOf(body, other)
-                    if is_inside() > 0.:
-                        containments += 1
-                        dao = to_dao(is_inside, memo=memo)
-                        daos.append(dao)
-                        pbar.set_postfix({"containments": containments})
+        for body, other in itertools.product(world.bodies, world.bodies):
+            if body != other:
+                is_inside = InsideOf(body, other)
+                if is_inside() > 0.0:
+                    dao = to_dao(is_inside, memo=memo)
+                    daos.append(dao)
 
-        session.add_all(daos)
-        session.commit()
+        procthor_experiments_session.add_all(daos)
+        procthor_experiments_session.commit()
 
 
 if __name__ == "__main__":

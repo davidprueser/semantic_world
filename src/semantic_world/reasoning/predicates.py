@@ -548,7 +548,6 @@ class InsideOf(SpatialRelation):
             return 0.0
 
         inside = mesh_b_bbox.contains(mesh_a.vertices)
-        if inside == 0:
+        if len(inside) == 0:
             return 0.0
         return sum(inside) / len(inside)
-
