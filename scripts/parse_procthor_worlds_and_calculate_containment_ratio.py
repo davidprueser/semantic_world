@@ -1,4 +1,5 @@
 import itertools
+import logging
 import os
 from io import BytesIO, StringIO
 from pathlib import Path
@@ -39,9 +40,12 @@ def parse_procthor_worlds_and_calculate_containment_ratio():
     for index, house in enumerate(
         tqdm.tqdm(dataset["train"], desc="Parsing Procthor worlds")
     ):
-        parser = ProcTHORParser(f"house_{index}", house, semantic_world_session)
-        world = parser.parse()
-
+        try:
+            parser = ProcTHORParser(f"house_{index}", house, semantic_world_session)
+            world = parser.parse()
+        except Exception as e:
+            logging.error(f"Error parsing house {index}: {e}")
+            continue
         # resolve views
         resolver = ProcthorResolver(*[recursive_subclasses(HouseholdObject)])
         for body in world.bodies:
