@@ -105,7 +105,9 @@ class ProcTHORTestCase(unittest.TestCase):
         world = procthor_room.get_world()
         self.assertEqual(world.root.name.name, "Kitchen_4")
 
-        region = world.get_kinematic_structure_entity_by_name("Kitchen_4_surface_region")
+        region = world.get_kinematic_structure_entity_by_name(
+            "Kitchen_4_surface_region"
+        )
         self.assertIsInstance(region, Region)
         region_area_mesh = region.area[0]
         self.assertAlmostEqual(region_area_mesh.mesh.area, 18.06)

@@ -4,6 +4,8 @@ import os
 from io import BytesIO, StringIO
 from pathlib import Path
 import tqdm
+from entity_query_language import Predicate
+from entity_query_language.symbolic import Variable
 from ormatic.dao import to_dao
 from ormatic.utils import recursive_subclasses, drop_database
 from sqlalchemy import create_engine
@@ -30,8 +32,8 @@ def parse_procthor_worlds_and_calculate_containment_ratio():
     procthor_experiments_engine = create_engine(
         procthor_experiments_database_uri, echo=False
     )
-    drop_database(procthor_experiments_engine)
-    Base.metadata.create_all(procthor_experiments_engine)
+    # drop_database(procthor_experiments_engine)
+    # Base.metadata.create_all(procthor_experiments_engine)
     procthor_experiments_session = Session(procthor_experiments_engine)
 
     dataset = prior.load_dataset("procthor-10k")
@@ -40,6 +42,8 @@ def parse_procthor_worlds_and_calculate_containment_ratio():
     for index, house in enumerate(
         tqdm.tqdm(dataset["train"], desc="Parsing Procthor worlds")
     ):
+        if index < 1850:
+            continue
         try:
             parser = ProcTHORParser(f"house_{index}", house, semantic_world_session)
             world = parser.parse()
@@ -68,6 +72,10 @@ def parse_procthor_worlds_and_calculate_containment_ratio():
 
         procthor_experiments_session.add_all(daos)
         procthor_experiments_session.commit()
+        procthor_experiments_session.expunge_all()
+        for c in Variable._cache_.values():
+            c.clear()
+        Variable._cache_.clear()
 
 
 if __name__ == "__main__":

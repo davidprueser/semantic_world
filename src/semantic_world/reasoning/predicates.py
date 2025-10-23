@@ -511,6 +511,8 @@ class InsideOf(SpatialRelation):
     """
     The "inside of" relation is defined as the fraction of the volume of self.body
     that lies within the bounding box of self.other.
+
+    Readily, `InsideOf(a,b) = 1.` means that `a` is completely inside `b`.
     """
 
     containment_ratio: float = 0.0
