@@ -9,6 +9,7 @@ import numpy as np
 
 from ..world_description.connections import ActiveConnection
 from ..world_description.world_entity import Body
+
 if TYPE_CHECKING:
     from ..world import World
 

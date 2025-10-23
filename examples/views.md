@@ -14,20 +14,19 @@ kernelspec:
 (semantic_annotations)=
 # Semantic Annotations (Views)
 
-Views are semantic annotations to world entities.
+Views are semantic annotations attached to world entities.
 For instance, they can be used to say that a certain body should be interpreted as a handle or that a combination of
 bodies should be interpreted as a drawer.
 Ontologies inspire views. The semantic world overcomes the technical limitations of ontologies by representing
-semantic annotations as python classes and use the typing system of python together with EQL for reasoning.
-This tutorial shows you how to apply views to the world and how to create your own views.
+semantic annotations as Python classes and by using Python's typing together with the Entity Query Language (EQL) for reasoning.
+This tutorial shows you how to apply views to a world and how to create your own views.
 
 Used Concepts:
-- Factories
 - [](creating-custom-bodies)
 - [](world-structure-manipulation)
 - [Entity Query Language](https://abdelrhmanbassiouny.github.io/entity_query_language/intro.html)
 
-First, let's create a world containing a drawer.
+First, let's create a simple world that contains a couple of apples.
 
 ```{code-cell} ipython2
 from dataclasses import dataclass
@@ -37,86 +36,14 @@ from entity_query_language import entity, an, let, symbolic_mode
 
 from semantic_world.datastructures.prefixed_name import PrefixedName
 from semantic_world.spatial_types.spatial_types import TransformationMatrix
-from semantic_world.views.factories import (
-    DrawerFactory,
-    ContainerFactory,
-    HandleFactory,
-    Direction,
-)
-from semantic_world.views.views import Drawer, Handle, Container
+from semantic_world.views.views import Container
 from semantic_world.world import World
 from semantic_world.world_description.connections import Connection6DoF
-from semantic_world.world_description.geometry import Sphere, Scale
+from semantic_world.world_description.geometry import Sphere, Box, Scale
 from semantic_world.world_description.world_entity import View, Body
 from semantic_world.spatial_computations.raytracer import RayTracer
 
 
-world = DrawerFactory(
-    name=PrefixedName("drawer"),
-    container_factory=ContainerFactory(name=PrefixedName("container"), direction=Direction.Z),
-    handle_factory=HandleFactory(name=PrefixedName("handle")),
-).create()
-
-print(*world.views, sep="\n")
-rt = RayTracer(world)
-rt.update_scene()
-rt.scene.show("jupyter")
-```
-
-The annotations now proof useful when an agent needs to infer information from the world.
-For instance, an agent might want to open a drawer. Opening a drawer is done by grasping the drawer handle.
-Due to the semantic structure, it is easily possible to access this information for the agent by formulating a query like this
-
-```{code-cell} ipython2
-with symbolic_mode():
-    handles = an(entity(let(Handle, world.views)))
-print(list(handles.evaluate()))
-```
-
-The interlinking of the semantic annotations is done via classes. This is very useful, to filter for more context
-in the world. For instance, consider a world that has a second handle that is attached to nothing and hence
-shouldn't be used by the agent to open a drawer.
-
-
-```{code-cell} ipython2
-useless_handle = HandleFactory(name=PrefixedName("useless handle")).create()
-rt = RayTracer(useless_handle)
-rt.update_scene()
-rt.scene.show("jupyter")
-print(useless_handle.views)
-
-with world.modify_world():
-    world.merge_world_at_pose(
-        useless_handle, TransformationMatrix.from_xyz_rpy(x=1.0, y=1.0)
-    )
-rt = RayTracer(world)
-rt.update_scene()
-rt.scene.show("jupyter")
-```
-
-If we now evaluate the handle query, we see that multiple options exist.
-
-```{code-cell} ipython2
-print(*handles.evaluate(), sep="\n")
-```
-
-We can refine the handle the agent wants by saying it must belong to a drawer
-
-```{code-cell} ipython2
-with symbolic_mode():
-    drawer = let(Drawer, world.views)
-    handle = let(Handle, world.views)
-    result = an(entity(handle, drawer.handle == handle))
-print(*result.evaluate(), sep="\n")
-```
-
-Now we will shift the focus to creating new views.
-Views define what they are (is-a) through inheritance.
-Make sure you follow the (Liskov substitution principle)[https://en.wikipedia.org/wiki/Liskov_substitution_principle] when creating new views that inherit from existing views.
-Views define what they relate to via their attribute types.
-For instance, we can make an Apple view that classifies a body as an apple.
-
-```{code-cell} ipython2
 @dataclass
 class Apple(View):
     """A simple custom view declaring that a Body is an Apple."""
@@ -131,33 +58,48 @@ class Apple(View):
 
 world = World()
 with world.modify_world():
-
     root = Body(name=PrefixedName("root"))
 
-    # Create a body with spherical geometry
+    # Our first apple
     apple_body = Body(name=PrefixedName("apple_body"))
-    sphere = Sphere(
-        radius=0.15, origin=TransformationMatrix(reference_frame=apple_body)
-    )
+    sphere = Sphere(radius=0.15, origin=TransformationMatrix(reference_frame=apple_body))
     apple_body.collision = [sphere]
     apple_body.visual = [sphere]
 
-    root_to_apple = Connection6DoF(parent=root, child=apple_body, _world=world)
-    world.add_connection(root_to_apple)
+    world.add_connection(Connection6DoF(parent=root, child=apple_body, _world=world))
+    world.add_view(Apple(body=apple_body, name=PrefixedName("apple1")))
 
-    # Declare the body as an Apple view and add it to the world
-    apple_view = Apple(body=apple_body, name=PrefixedName("apple"))
-    world.add_view(apple_view)
+    # Our second apple
+    apple_body_2 = Body(name=PrefixedName("apple_body_2"))
+    sphere2 = Sphere(radius=0.15, origin=TransformationMatrix(reference_frame=apple_body_2))
+    apple_body_2.collision = [sphere2]
+    apple_body_2.visual = [sphere2]
+    c2 = Connection6DoF(parent=root, child=apple_body_2, _world=world)
+    world.add_connection(c2)
+    # Move it a bit so we can see both
+    world.state[c2.x.name].position = 0.3
+    world.state[c2.y.name].position = 0.2
+    world.add_view(Apple(body=apple_body_2, name=PrefixedName("apple2")))
 
-print(world.views)
+print(world.get_views_by_type(Apple))
 rt = RayTracer(world)
 rt.update_scene()
 rt.scene.show("jupyter")
 ```
 
-Views can become arbitrary complex. For instance, we can make a box of fruits.
+Thanks to the semantic annotations, an agent can query for apples directly using EQL:
 
 ```{code-cell} ipython2
+with symbolic_mode():
+    apples = an(entity(let(Apple, world.views)))
+print(*apples.evaluate(), sep="\n")
+```
+
+Views can become arbitrarily expressive. For instance, we can define a FruitBox that groups a container and a list of apples.
+
+```{code-cell} ipython2
+from semantic_world.views.factories import ContainerFactory, Direction
+
 @dataclass
 class FruitBox(View):
     box: Container
@@ -168,40 +110,63 @@ class FruitBox(View):
             self.name = PrefixedName(str(self.box.name), self.__class__.__name__)
 
 
-apple_body_2 = Body(name=PrefixedName("apple_body_2"))
-sphere = Sphere(radius=0.15, origin=TransformationMatrix(reference_frame=apple_body_2))
-apple_body_2.collision = [sphere]
-apple_body_2.visual = [sphere]
-
-
 with world.modify_world():
-    bowl_world = ContainerFactory(
-        name=PrefixedName("box"), direction=Direction.Z, scale=Scale(1.0, 1.0, 0.3)
+    # To create a hollowed out box in this case we use a "ContainerFactory". 
+    # To learn more about how cool ViewFactories are, please visit the appropriate guide!
+    fruit_box_container_world = ContainerFactory(
+        name=PrefixedName("fruit_box_container"), direction=Direction.Z, scale=Scale(1.0, 1.0, 0.3)
     ).create()
     world.merge_world_at_pose(
-        bowl_world,
-        TransformationMatrix(),
+        fruit_box_container_world,
+        TransformationMatrix.from_xyz_rpy(x=0.3),
     )
 
-    root_to_apple2 = Connection6DoF(
-        parent=root,
-        child=apple_body_2,
-        _world=world,
-    )
-    world.add_connection(root_to_apple2)
-    world.state[root_to_apple2.x.name].position = 0.3
-
-world.add_view(Apple(body=apple_body_2, name=PrefixedName("apple2")))
-fruit_box = FruitBox(
-    box=world.get_views_by_type(Container)[0], fruits=world.get_views_by_type(Apple)
-)
-world.add_view(fruit_box)
-print(f"Fruit box with {len(fruit_box.fruits)} fruits")
+fruit_box_container_view = world.get_views_by_type(Container)[0]
+fruit_box_with_apples = FruitBox(box=fruit_box_container_view, fruits=world.get_views_by_type(Apple))
+world.add_view(fruit_box_with_apples)
+print(f"Fruit box with {len(fruit_box_with_apples.fruits)} fruits")
 rt = RayTracer(world)
 rt.update_scene()
 rt.scene.show("jupyter")
 ```
 
-One great quality of this is that every other agent who imports your definitions of views in the world is now able
-to understand what you mean and how you define it. Since everything is python, the processes won't have any compatibility
-issues.
+Because these are plain Python classes, any other agent that imports your view definitions will understand exactly what
+you mean. Interoperability comes for free without hidden formats or conversion issues.
+
+---
+
+We can incorporate the attributes of our Views into our reasoning.
+To demonstrate this, let's first create another FruitBox, but which is empty this time.
+
+```{code-cell} ipython2
+with world.modify_world():
+    empty_fruit_box_container_world = ContainerFactory(
+        name=PrefixedName("empty_fruit_box_container"), direction=Direction.Z, scale=Scale(1.0, 1.0, 0.3)
+    ).create()
+    world.merge_world_at_pose(
+        empty_fruit_box_container_world,
+        TransformationMatrix.from_xyz_rpy(x=-1),
+    )
+
+empty_fruit_box_container_view = world.get_view_by_name("empty_fruit_box_container")
+assert isinstance(empty_fruit_box_container_view, Container)
+empty_fruit_box = FruitBox(box=empty_fruit_box_container_view, fruits=[])
+world.add_view(empty_fruit_box)
+
+rt = RayTracer(world)
+rt.update_scene()
+rt.scene.show("jupyter")
+```
+
+We can now use EQL to get us only the FruitBoxes that actually contain apples!
+
+```{code-cell} ipython2
+from semantic_world.reasoning.predicates import ContainsType
+from entity_query_language import a
+
+with symbolic_mode():
+    fruit_box_query = a(fb := FruitBox(), ContainsType(fb.fruits, Apple))
+
+query_result = fruit_box_query.evaluate()
+print(list(query_result)[0] == fruit_box_with_apples)
+```

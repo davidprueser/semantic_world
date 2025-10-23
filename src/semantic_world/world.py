@@ -25,6 +25,7 @@ from typing_extensions import (
     Union,
     Callable,
     Any,
+    Iterable,
 )
 from typing_extensions import List
 from typing_extensions import Type, Set
@@ -41,7 +42,7 @@ from .exceptions import (
     AlreadyBelongsToAWorldError,
     DuplicateKinematicStructureEntityError,
 )
-from .robots import AbstractRobot
+from .robots.abstract_robot import AbstractRobot
 from .spatial_computations.forward_kinematics import ForwardKinematicsVisitor
 from .spatial_computations.ik_solver import InverseKinematicsSolver
 from .spatial_computations.raytracer import RayTracer
@@ -54,8 +55,9 @@ from .world_description.connections import (
     PassiveConnection,
     FixedConnection,
     Connection6DoF,
+    ActiveConnection1DOF,
 )
-from .world_description.connections import HasUpdateState, Has1DOFState
+from .world_description.connections import HasUpdateState
 from .world_description.degree_of_freedom import DegreeOfFreedom
 from .world_description.world_entity import (
     Connection,
@@ -63,6 +65,7 @@ from .world_description.world_entity import (
     KinematicStructureEntity,
     Region,
     GenericKinematicStructureEntity,
+    GenericConnection,
     CollisionCheckingConfig,
     Body,
 )
@@ -75,6 +78,7 @@ from .world_description.world_modification import (
     RemoveBodyModification,
     RemoveConnectionModification,
     WorldModelModificationBlock,
+    SetDofHasHardwareInterface,
 )
 from .world_description.world_state import WorldState
 
@@ -157,13 +161,13 @@ class WorldModelUpdateContextManager:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.first:
-            self.world.world_is_being_modified = False
             self.world._model_modification_blocks.append(
                 self.world._current_model_modification_block
             )
             self.world._current_model_modification_block = None
             if exc_type is None:
                 self.world._notify_model_change()
+            self.world.world_is_being_modified = False
 
 
 class AtomicWorldModificationNotAtomic(Exception):
@@ -502,18 +506,21 @@ class World:
         and forward kinematics expressions while also triggering registered callbacks
         for model changes.
         """
-        if not self.world_is_being_modified:
-            self.compile_forward_kinematics_expressions()
-            self.clear_all_lru_caches()
-            self.notify_state_change()
-            self._model_version += 1
+        # if not self.world_is_being_modified:
+        self.compile_forward_kinematics_expressions()
+        self.clear_all_lru_caches()
+        self.notify_state_change()
+        self._model_version += 1
 
-            for callback in self.model_change_callbacks:
-                callback.notify()
+        for callback in self.model_change_callbacks:
+            callback.notify()
 
-            self.validate()
-            self.disable_non_robot_collisions()
-            self.disable_collisions_for_adjacent_bodies()
+        for callback in self.state_change_callbacks:
+            callback.update_previous_world_state()
+
+        self.validate()
+        self.disable_non_robot_collisions()
+        self.disable_collisions_for_adjacent_bodies()
 
     def delete_orphaned_dofs(self):
         actual_dofs = set()
@@ -590,7 +597,7 @@ class World:
         Add a kinematic_structure_entity to the world if it does not exist already.
 
         :param kinematic_structure_entity: The kinematic_structure_entity to add.
-        :param handle_duplicates: If True, the kinematic_structure_entity will not be added under a different name, if
+        :param handle_duplicates: If True, the kinematic_structure_entity will be added under a different name, if
         the name already exists. If False, an error will be raised. Default is False.
         :return: The index of the added kinematic_structure_entity.
         """
@@ -647,6 +654,27 @@ class World:
         self.kinematic_structure.add_edge(
             connection.parent.index, connection.child.index, connection
         )
+
+    @atomic_world_modification(modification=SetDofHasHardwareInterface)
+    def set_dofs_has_hardware_interface(
+        self, dofs: Iterable[DegreeOfFreedom], value: bool
+    ):
+        """
+        Sets whether the specified degrees of freedom (DOFs) have a hardware interface or not.
+
+        This method allows controlling the presence of a hardware interface for multiple
+        DOFs at once. The modification is atomic, ensuring that all DOFs are updated as
+        a single operation and the state remains consistent. The method iterates through
+        the given DOFs and updates their `has_hardware_interface` attribute to the provided
+        value.
+
+        :param dofs: An iterable collection of DegreeOfFreedom instances whose
+                     `has_hardware_interface` attribute is to be updated.
+        :param value: A boolean value indicating whether the DOFs should have a hardware
+                      interface (True) or not (False).
+        """
+        for dof in dofs:
+            dof.has_hardware_interface = value
 
     def add_connection(
         self, connection: Connection, handle_duplicates: bool = False
@@ -899,6 +927,7 @@ class World:
         assert other is not self, "Cannot merge a world with itself."
 
         with self.modify_world():
+            old_state = deepcopy(other.state)
             self_root = self.root
             other_root = other.root
             with other.modify_world():
@@ -934,6 +963,9 @@ class World:
             if connection:
                 self.add_connection(connection, handle_duplicates=handle_duplicates)
 
+            for dof_name in old_state.keys():
+                self.state[dof_name] = old_state[dof_name]
+
     def move_branch(
         self,
         branch_root: KinematicStructureEntity,
@@ -957,7 +989,7 @@ class World:
                     parent=new_parent,
                     child=branch_root,
                     _world=self,
-                    origin_expression=new_parent_T_root,
+                    parent_T_connection_expression=new_parent_T_root,
                 )
                 self.add_connection(new_connection)
                 self.remove_connection(old_connection)
@@ -1002,8 +1034,8 @@ class World:
         return self.kinematic_structure.get_edge_data(parent.index, child.index)
 
     def get_connections_by_type(
-        self, connection_type: Union[Type[Connection], Tuple[Type[Connection], ...]]
-    ) -> List[Connection]:
+        self, connection_type: Type[GenericConnection]
+    ) -> List[GenericConnection]:
         return [c for c in self.connections if isinstance(c, connection_type)]
 
     def clear(self):
@@ -1059,9 +1091,7 @@ class World:
             return matches[0]
         raise KeyError(f"KinematicStructureEntity with name {name} not found")
 
-    def get_body_by_name(
-        self, name: Union[str, PrefixedName]
-    ) -> KinematicStructureEntity:
+    def get_body_by_name(self, name: Union[str, PrefixedName]) -> Body:
         """
         Retrieves a Body from the list of bodies based on its name.
         If the input is of type `PrefixedName`, it checks whether the prefix is specified and looks for an
@@ -1631,7 +1661,7 @@ class World:
         self.notify_state_change()
 
     def set_positions_1DOF_connection(
-        self, new_state: Dict[Has1DOFState, float]
+        self, new_state: Dict[ActiveConnection1DOF, float]
     ) -> None:
         """
         Set the positions of 1DOF connections and notify the world of the state change.
@@ -1723,7 +1753,7 @@ class World:
         return set(
             c
             for c in self.connections
-            if isinstance(c, ActiveConnection) and c.is_controlled
+            if isinstance(c, ActiveConnection) and c.has_hardware_interface
         )
 
     def is_controlled_connection_in_chain(
@@ -1734,7 +1764,7 @@ class World:
         for c in connections:
             if (
                 isinstance(c, ActiveConnection)
-                and c.is_controlled
+                and c.has_hardware_interface
                 and not c.frozen_for_collision_avoidance
             ):
                 return True
@@ -1829,7 +1859,7 @@ class World:
                 parent_index, child_index, e = args
                 if (
                     isinstance(e, ActiveConnection)
-                    and e.is_controlled
+                    and e.has_hardware_interface
                     and not e.frozen_for_collision_avoidance
                 ):
                     raise rx.visit.PruneSearch()
@@ -1838,23 +1868,6 @@ class World:
         rx.dfs_search(self.kinematic_structure, [connection.child.index], visitor)
 
         return visitor.bodies
-
-    @lru_cache(maxsize=None)
-    def get_controlled_parent_connection(
-        self, body: KinematicStructureEntity
-    ) -> Connection:
-        """
-        Traverse the chain up until a controlled active connection is found.
-        :param body: The body where the search starts.
-        :return: The controlled active connection.
-        """
-        if body == self.root:
-            raise ValueError(
-                f"Cannot get controlled parent connection for root body {self.root.name}."
-            )
-        if body.parent_connection in self.controlled_connections:
-            return body.parent_connection
-        return self.get_controlled_parent_connection(body.parent_body)
 
     def compute_chain_reduced_to_controlled_joints(
         self, root: KinematicStructureEntity, tip: KinematicStructureEntity
@@ -1878,7 +1891,7 @@ class World:
         for i, connection in enumerate(chain):
             if (
                 isinstance(connection, ActiveConnection)
-                and connection.is_controlled
+                and connection.has_hardware_interface
                 and not connection.frozen_for_collision_avoidance
             ):
                 new_root = connection
@@ -1890,7 +1903,7 @@ class World:
         for i, connection in enumerate(reversed(chain)):
             if (
                 isinstance(connection, ActiveConnection)
-                and connection.is_controlled
+                and connection.has_hardware_interface
                 and not connection.frozen_for_collision_avoidance
             ):
                 new_tip = connection
@@ -1930,7 +1943,7 @@ class World:
         for c in connections:
             if (
                 isinstance(c, ActiveConnection)
-                and c.is_controlled
+                and c.has_hardware_interface
                 and not c.frozen_for_collision_avoidance
             ):
                 return True

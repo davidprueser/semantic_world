@@ -26,6 +26,9 @@ from ...views.factories import (
     HandleFactory,
     Direction,
     DoubleDoorFactory,
+    HorizontalSemanticDirection,
+    SemanticPositionDescription,
+    VerticalSemanticDirection,
 )
 from ...world import World
 from ...world_description.connections import FixedConnection
@@ -137,7 +140,6 @@ class ProcthorDoor:
         one_door_scale = Scale(self.thickness, self.scale.y * 0.5, self.scale.z)
         x_direction: float = one_door_scale.x / 2
         y_direction: float = one_door_scale.y / 2
-        z_direction: float = one_door_scale.z / 2
         handle_directions = [Direction.Y, Direction.NEGATIVE_Y]
 
         door_factories = []
@@ -147,22 +149,29 @@ class ProcthorDoor:
             single_door_name = PrefixedName(
                 f"{self.name.name}_{index}", self.name.prefix
             )
+
+            horizontal_direction = (
+                HorizontalSemanticDirection.RIGHT
+                if direction == Direction.Y
+                else HorizontalSemanticDirection.LEFT
+            )
+            semantic_position = SemanticPositionDescription(
+                horizontal_direction_chain=[
+                    horizontal_direction,
+                    HorizontalSemanticDirection.FULLY_CENTER,
+                ],
+                vertical_direction_chain=[VerticalSemanticDirection.FULLY_CENTER],
+            )
+
             door_factory = self._get_single_door_factory(
-                single_door_name, one_door_scale, direction
+                semantic_position, single_door_name, one_door_scale
             )
 
             door_factories.append(door_factory)
 
-            parent_T_door = TransformationMatrix.from_point_rotation_matrix(
-                Point3(
-                    x_direction,
-                    (
-                        y_direction
-                        if door_factory.handle_direction == Direction.NEGATIVE_Y
-                        else -y_direction
-                    ),
-                    z_direction,
-                )
+            parent_T_door = TransformationMatrix.from_xyz_rpy(
+                x=x_direction,
+                y=(-y_direction) if direction == Direction.Y else y_direction,
             )
             door_transforms.append(parent_T_door)
 
@@ -175,10 +184,10 @@ class ProcthorDoor:
 
     def _get_single_door_factory(
         self,
+        semantic_position: SemanticPositionDescription,
         name: Optional[PrefixedName] = None,
         scale: Optional[Scale] = None,
-        handle_direction: Direction = Direction.Y,
-    ):
+    ) -> DoorFactory:
         """
         Parses the parameters according to the single door assumptions, and returns a single door factory.
         """
@@ -189,7 +198,7 @@ class ProcthorDoor:
             name=name,
             scale=scale,
             handle_factory=HandleFactory(name=handle_name),
-            handle_direction=handle_direction,
+            semantic_position=semantic_position,
         )
         return door_factory
 
@@ -202,7 +211,14 @@ class ProcthorDoor:
         if "double" in self.name.name.lower():
             return self._get_double_door_factory()
         else:
-            return self._get_single_door_factory()
+            semantic_position = SemanticPositionDescription(
+                horizontal_direction_chain=[
+                    HorizontalSemanticDirection.RIGHT,
+                    HorizontalSemanticDirection.FULLY_CENTER,
+                ],
+                vertical_direction_chain=[VerticalSemanticDirection.FULLY_CENTER],
+            )
+            return self._get_single_door_factory(semantic_position=semantic_position)
 
 
 @dataclass
@@ -489,7 +505,7 @@ class ProcthorObject:
                 child_connection = FixedConnection(
                     parent=body_world.root,
                     child=child_world.root,
-                    origin_expression=obj_T_child,
+                    parent_T_connection_expression=obj_T_child,
                 )
                 body_world.merge_world(
                     child_world, child_connection, handle_duplicates=True
@@ -598,7 +614,7 @@ class ProcTHORParser:
             room_connection = FixedConnection(
                 parent=world.root,
                 child=room_world.root,
-                origin_expression=procthor_room.world_T_room,
+                parent_T_connection_expression=procthor_room.world_T_room,
             )
             world.merge_world(room_world, room_connection, handle_duplicates=True)
 
@@ -619,7 +635,7 @@ class ProcTHORParser:
             obj_connection = FixedConnection(
                 parent=world.root,
                 child=obj_world.root,
-                origin_expression=procthor_object.world_T_obj,
+                parent_T_connection_expression=procthor_object.world_T_obj,
             )
             world.merge_world(obj_world, obj_connection, handle_duplicates=True)
 
@@ -640,7 +656,7 @@ class ProcTHORParser:
             wall_connection = FixedConnection(
                 parent=world.root,
                 child=wall_world.root,
-                origin_expression=procthor_wall.world_T_wall,
+                parent_T_connection_expression=procthor_wall.world_T_wall,
             )
             world.merge_world(wall_world, wall_connection, handle_duplicates=True)
 

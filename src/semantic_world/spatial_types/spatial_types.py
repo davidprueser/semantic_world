@@ -32,10 +32,15 @@ from typing_extensions import (
 import casadi as ca
 from scipy import sparse as sp
 
-from ..exceptions import HasFreeSymbolsError, NotSquareMatrixError, WrongDimensionsError
+from ..exceptions import (
+    HasFreeSymbolsError,
+    NotSquareMatrixError,
+    WrongDimensionsError,
+    SpatialTypesError,
+)
 
 if TYPE_CHECKING:
-    from ..world_description.world_entity import KinematicStructureEntity
+    from ..world_description.world_entity import KinematicStructureEntity, Connection
 
 EPS: float = sys.float_info.epsilon * 4.0
 
@@ -1754,7 +1759,7 @@ class ReferenceFrameMixin:
 
     """
 
-    reference_frame: Optional[KinematicStructureEntity] = field(
+    reference_frame: Optional[KinematicStructureEntity | Connection] = field(
         kw_only=True, default=None
     )
     """
@@ -1776,7 +1781,7 @@ class TransformationMatrix(SymbolicType, ReferenceFrameMixin, MatrixOperationsMi
 
     child_frame: Optional[KinematicStructureEntity] = field(kw_only=True, default=None)
     """
-    child_frame: Optional[KinematicStructureEntity]
+    child_frame of this transformation matrix.
     """
 
     data: InitVar[Optional[Matrix2dData]] = None
@@ -1831,6 +1836,9 @@ class TransformationMatrix(SymbolicType, ReferenceFrameMixin, MatrixOperationsMi
         :return: A `TransformationMatrix` instance initialized with the provided
             parameters or default values.
         """
+        if reference_frame is None:
+            reference_frame = cls._ensure_consistent_frame([point, rotation_matrix])
+
         if rotation_matrix is None:
             a_T_b = cls(reference_frame=reference_frame, child_frame=child_frame)
         else:
@@ -1845,6 +1853,41 @@ class TransformationMatrix(SymbolicType, ReferenceFrameMixin, MatrixOperationsMi
             a_T_b[1, 3] = point.y
             a_T_b[2, 3] = point.z
         return a_T_b
+
+    @staticmethod
+    def _ensure_consistent_frame(
+        spatial_objects: List[Optional[ReferenceFrameMixin]],
+    ) -> Optional[KinematicStructureEntity]:
+        """
+        Ensures that all provided spatial objects have a consistent reference frame. If a mismatch
+        in the reference frames is detected among the non-null spatial objects, an exception is
+        raised. If the list contains only null objects, None is returned.
+
+        This method is primarily used to validate the reference frames of spatial objects before
+        proceeding with further operations.
+
+        :param spatial_objects: A list containing zero or more spatial objects, which can either
+            be instances of ReferenceFrameMixin or None.
+        :return: The common reference frame of the spatial objects if consistent, or None if no
+            valid reference frame exists.
+
+        :raises SpatialTypesError: Raised when the reference frames of provided input spatial
+            objects are inconsistent.
+        """
+        reference_frame = None
+        for spatial_object in spatial_objects:
+            if (
+                spatial_object is not None
+                and spatial_object.reference_frame is not None
+            ):
+                if reference_frame is None:
+                    reference_frame = spatial_object.reference_frame
+                    continue
+                if reference_frame != spatial_object.reference_frame:
+                    raise SpatialTypesError(
+                        f"Reference frames of input parameters don't match ({reference_frame} != {spatial_object.reference_frame})."
+                    )
+        return reference_frame
 
     @classmethod
     def from_xyz_rpy(
@@ -1916,6 +1959,43 @@ class TransformationMatrix(SymbolicType, ReferenceFrameMixin, MatrixOperationsMi
         )
         return cls.from_point_rotation_matrix(
             p, r, reference_frame=reference_frame, child_frame=child_frame
+        )
+
+    @classmethod
+    def from_xyz_axis_angle(
+        cls,
+        x: ScalarData = 0,
+        y: ScalarData = 0,
+        z: ScalarData = 0,
+        axis: Vector3 | NumericalArray = None,
+        angle: ScalarData = 0,
+        reference_frame: Optional[KinematicStructureEntity] = None,
+        child_frame: Optional[KinematicStructureEntity] = None,
+    ) -> Self:
+        """
+        Creates an instance of the class from x, y, z coordinates, axis and angle.
+
+        This class method generates an object using provided spatial coordinates and a
+        rotation defined by an axis and angle. The resulting object is defined with
+        a specified reference frame and child frame.
+
+        :param x: Initial x-coordinate.
+        :param y: Initial y-coordinate.
+        :param z: Initial z-coordinate.
+        :param axis: Vector defining the axis of rotation. Defaults to Vector3(0, 0, 1) if not specified.
+        :param angle: Angle of rotation around the specified axis, in radians.
+        :param reference_frame: Reference frame entity to be associated with the object.
+        :param child_frame: Child frame entity associated with the object.
+        :return: An instance of the class with the specified transformations applied.
+        """
+        axis = axis or Vector3(0, 0, 1)
+        rotation_matrix = RotationMatrix.from_axis_angle(axis=axis, angle=angle)
+        point = Point3(x_init=x, y_init=y, z_init=z)
+        return cls.from_point_rotation_matrix(
+            point=point,
+            rotation_matrix=rotation_matrix,
+            reference_frame=reference_frame,
+            child_frame=child_frame,
         )
 
     @property
@@ -2004,7 +2084,7 @@ class TransformationMatrix(SymbolicType, ReferenceFrameMixin, MatrixOperationsMi
         )
 
     def to_rotation_matrix(self) -> RotationMatrix:
-        return RotationMatrix(data=self)
+        return RotationMatrix(data=self, reference_frame=self.reference_frame)
 
     def to_quaternion(self) -> Quaternion:
         return Quaternion.from_rotation_matrix(self)
@@ -2221,7 +2301,8 @@ class RotationMatrix(SymbolicType, ReferenceFrameMixin, MatrixOperationsMixin):
         - y and z provided: x = y × z
         - x, y, and z provided: all three used directly
         """
-
+        if x is None and y is None and z is None:
+            raise SpatialTypesError("from_vectors requires at least two vectors")
         if x is not None and y is not None and z is None:
             z = x.cross(y)
         elif x is not None and y is None and z is not None:

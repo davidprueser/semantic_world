@@ -4,6 +4,7 @@ from copy import deepcopy
 import numpy as np
 import pytest
 
+from semantic_world.spatial_types import Vector3
 from semantic_world.world_description.connections import (
     PrismaticConnection,
     RevoluteConnection,
@@ -15,9 +16,10 @@ from semantic_world.exceptions import (
     DuplicateViewError,
     ViewNotFoundError,
     DuplicateKinematicStructureEntityError,
+    UsageError,
 )
 from semantic_world.datastructures.prefixed_name import PrefixedName
-from semantic_world.spatial_types.derivatives import Derivatives
+from semantic_world.spatial_types.derivatives import Derivatives, DerivativeMap
 
 # from semantic_world.spatial_types.math import rotation_matrix_from_rpy
 from semantic_world.spatial_types.spatial_types import (
@@ -162,6 +164,19 @@ def test_split_chain_of_connections_identical(world_setup):
     result = world.compute_split_chain_of_connections(root=r1, tip=r1)
     result = tuple([x.name for x in y] for y in result)
     assert result == ([], [])
+
+
+def test_nested_with_blocks_illegal_state(world_setup):
+    world, l1, l2, bf, r1, r2 = world_setup
+
+    with world.modify_world():
+        connection1 = world.get_connection(l1, l2)
+        world.remove_connection(connection1)
+        with world.modify_world():
+            connection2 = world.get_connection(r1, r2)
+            world.remove_connection(connection2)
+        world.add_connection(connection1)
+        world.add_connection(connection2)
 
 
 def test_compute_fk_connection6dof(world_setup):
@@ -419,19 +434,34 @@ def test_merge_with_connection(world_setup, pr2_world):
 
     origin = TransformationMatrix(pose)
 
-    new_connection = FixedConnection(
-        parent=world.root, child=pr2_world.root, origin_expression=origin, _world=world
-    )
-    world.merge_world(pr2_world, new_connection)
+    connection = pr2_world.get_connection_by_name("l_gripper_l_finger_joint")
+    pr2_world.state[connection.dof.name].position = 0.55
+    pr2_world.notify_state_change()
+    expected_fk = pr2_world.compute_forward_kinematics(
+        connection.parent, connection.child
+    ).to_np()
 
+    new_connection = FixedConnection(
+        parent=world.root,
+        child=pr2_world.root,
+        parent_T_connection_expression=origin,
+        _world=world,
+    )
+
+    world.merge_world(pr2_world, new_connection)
     assert base_link in world.kinematic_structure_entities
     assert r_gripper_tool_frame in world.kinematic_structure_entities
     assert new_connection in world.connections
     assert torso_lift_link._world == world
     assert r_shoulder_pan_joint._world == world
+    assert world.state[connection.dof.name].position == 0.55
     assert world.compute_forward_kinematics_np(world.root, base_link)[
         0, 3
     ] == pytest.approx(1.0, abs=1e-6)
+    actual_fk = world.compute_forward_kinematics(
+        connection.parent, connection.child
+    ).to_np()
+    assert np.allclose(actual_fk, expected_fk)
 
 
 def test_merge_with_pose(world_setup, pr2_world):
@@ -519,12 +549,13 @@ def test_merge_with_pose_rotation(world_setup, pr2_world):
 def test_remove_connection(world_setup):
     world, l1, l2, bf, r1, r2 = world_setup
     connection = world.get_connection(l1, l2)
+    num_dofs = len(world.degrees_of_freedom)
     with world.modify_world():
         world.remove_connection(connection)
         world.remove_kinematic_structure_entity(l2)
     assert connection not in world.connections
-    # dof should still exist because it was a mimic connection.
-    assert connection.dof.name in world.state
+    # dof should still exist because it was a mimic connection, so the number didn't change.
+    assert num_dofs == len(world.degrees_of_freedom)
 
     with world.modify_world():
         world.remove_connection(world.get_connection(r1, r2))
@@ -599,7 +630,9 @@ def test_copy_pr2_world_connection_origin(pr2_world):
     for body in pr2_world.bodies:
         pr2_body = pr2_world.get_kinematic_structure_entity_by_name(body.name)
         pr2_copy_body = pr2_copy.get_kinematic_structure_entity_by_name(body.name)
-        np.testing.assert_array_almost_equal(pr2_body.global_pose.to_np(), pr2_copy_body.global_pose.to_np())
+        np.testing.assert_array_almost_equal(
+            pr2_body.global_pose.to_np(), pr2_copy_body.global_pose.to_np()
+        )
 
 
 def test_world_different_entities(world_setup):
@@ -613,9 +646,6 @@ def test_world_different_entities(world_setup):
         assert dof not in world.degrees_of_freedom
 
 
-@unittest.skip(
-    "This test still fails because the origin of connections cannot be deepcopied properly."
-)
 def test_copy_pr2(pr2_world):
     pr2_world.state[
         pr2_world.get_degree_of_freedom_by_name("torso_lift_joint").name
@@ -636,3 +666,141 @@ def test_add_entity_with_duplicate_name(world_setup):
     with pytest.raises(DuplicateKinematicStructureEntityError):
         with world.modify_world():
             world.add_kinematic_structure_entity(body_duplicate)
+
+
+def test_overwrite_dof_limits(world_setup):
+    world, l1, l2, bf, r1, r2 = world_setup
+    connection: PrismaticConnection = world.get_connections_by_type(
+        PrismaticConnection
+    )[0]
+    assert connection.dof.lower_limits.velocity == -1
+    assert connection.dof.upper_limits.velocity == 1
+
+    new_limits = DerivativeMap([0.69, 0.42, 1337, 23])
+
+    connection.raw_dof._overwrite_dof_limits(
+        new_lower_limits=new_limits * -1, new_upper_limits=new_limits
+    )
+    assert connection.dof.lower_limits.position == -new_limits.position
+    assert connection.dof.upper_limits.position == new_limits.position
+    assert connection.dof.lower_limits.velocity == -new_limits.velocity
+    assert connection.dof.upper_limits.velocity == new_limits.velocity
+    assert connection.dof.lower_limits.acceleration == -new_limits.acceleration
+    assert connection.dof.upper_limits.acceleration == new_limits.acceleration
+    assert connection.dof.lower_limits.jerk == -new_limits.jerk
+    assert connection.dof.upper_limits.jerk == new_limits.jerk
+
+    new_limits2 = DerivativeMap([3333, 3333, 3333, 3333])
+
+    connection.raw_dof._overwrite_dof_limits(
+        new_lower_limits=new_limits2 * -1, new_upper_limits=new_limits2
+    )
+    assert connection.dof.lower_limits.position == -new_limits.position
+    assert connection.dof.upper_limits.position == new_limits.position
+    assert connection.dof.lower_limits.velocity == -new_limits.velocity
+    assert connection.dof.upper_limits.velocity == new_limits.velocity
+    assert connection.dof.lower_limits.acceleration == -new_limits.acceleration
+    assert connection.dof.upper_limits.acceleration == new_limits.acceleration
+    assert connection.dof.lower_limits.jerk == -new_limits.jerk
+    assert connection.dof.upper_limits.jerk == new_limits.jerk
+
+
+def test_overwrite_dof_limits_mimic(world_setup):
+    world, l1, l2, bf, r1, r2 = world_setup
+    connection: PrismaticConnection = world.get_connections_by_type(
+        PrismaticConnection
+    )[0]
+    with world.modify_world():
+        body = Body(name=PrefixedName("muh"))
+        mimic_connection = PrismaticConnection(
+            parent=bf,
+            child=body,
+            offset=23,
+            multiplier=-2,
+            axis=Vector3(0, 0, 1),
+            dof_name=connection.dof_name,
+        )
+        world.add_body(body)
+        world.add_connection(mimic_connection)
+
+    # when the multiplier is negative, the vel limits shouldn't be swapped
+    assert np.isclose(
+        mimic_connection.dof.lower_limits.velocity,
+        connection.dof.lower_limits.velocity * 2,
+    )
+    assert np.isclose(
+        mimic_connection.dof.upper_limits.velocity,
+        connection.dof.upper_limits.velocity * 2,
+    )
+
+    new_limits = DerivativeMap([0.69, 0.42, 1337, 23])
+
+    with pytest.raises(UsageError):
+        mimic_connection.dof._overwrite_dof_limits(
+            new_lower_limits=new_limits * -1, new_upper_limits=new_limits
+        )
+
+    mimic_connection.raw_dof._overwrite_dof_limits(
+        new_lower_limits=new_limits * -1, new_upper_limits=new_limits
+    )
+
+    # Check that limits are correctly applied with negative multiplier and offset
+    # Position limits: swapped due to negative multiplier, then scaled and offset applied
+    # Lower becomes: new_limits.position * (-2) + 23 = 0.69 * (-2) + 23 = -1.38 + 23 = 21.62
+    # Upper becomes: (new_limits * -1).position * (-2) + 23 = -0.69 * (-2) + 23 = 1.38 + 23 = 24.38
+    assert np.isclose(mimic_connection.dof.lower_limits.position, 21.62)
+    assert np.isclose(mimic_connection.dof.upper_limits.position, 24.38)
+
+    # Velocity limits: only multiplier applied (no offset), but absolute value for limits
+    # Since we're dealing with limits, velocity should use abs(multiplier) = 2
+    assert np.isclose(
+        mimic_connection.dof.lower_limits.velocity, (new_limits * -1).velocity * 2
+    )
+    assert np.isclose(
+        mimic_connection.dof.upper_limits.velocity, new_limits.velocity * 2
+    )
+
+    # Acceleration limits: only multiplier applied (no offset), absolute value for limits
+    assert np.isclose(
+        mimic_connection.dof.lower_limits.acceleration,
+        (new_limits * -1).acceleration * 2,
+    )
+    assert np.isclose(
+        mimic_connection.dof.upper_limits.acceleration, new_limits.acceleration * 2
+    )
+
+    # Jerk limits: only multiplier applied (no offset), absolute value for limits
+    assert np.isclose(
+        mimic_connection.dof.lower_limits.jerk, (new_limits * -1).jerk * 2
+    )
+    assert np.isclose(mimic_connection.dof.upper_limits.jerk, new_limits.jerk * 2)
+
+    # limits are only applied if the new ones are lower
+    new_limits2 = DerivativeMap([3333, 3333, 3333, 3333])
+
+    mimic_connection.raw_dof._overwrite_dof_limits(
+        new_lower_limits=new_limits2 * -1, new_upper_limits=new_limits2
+    )
+
+    assert np.isclose(mimic_connection.dof.lower_limits.position, 21.62)
+    assert np.isclose(mimic_connection.dof.upper_limits.position, 24.38)
+
+    assert np.isclose(
+        mimic_connection.dof.lower_limits.velocity, (new_limits * -1).velocity * 2
+    )
+    assert np.isclose(
+        mimic_connection.dof.upper_limits.velocity, new_limits.velocity * 2
+    )
+
+    assert np.isclose(
+        mimic_connection.dof.lower_limits.acceleration,
+        (new_limits * -1).acceleration * 2,
+    )
+    assert np.isclose(
+        mimic_connection.dof.upper_limits.acceleration, new_limits.acceleration * 2
+    )
+
+    assert np.isclose(
+        mimic_connection.dof.lower_limits.jerk, (new_limits * -1).jerk * 2
+    )
+    assert np.isclose(mimic_connection.dof.upper_limits.jerk, new_limits.jerk * 2)

@@ -2,6 +2,7 @@ import json
 import os
 import unittest
 from dataclasses import asdict
+from time import sleep
 
 import numpy as np
 from sqlalchemy import create_engine
@@ -290,7 +291,7 @@ class ProcTHORTestCase(unittest.TestCase):
         ...
 
     def test_parse_full_world(self):
-        world = ProcTHORParser(
+        world = ProcTHORParser.from_file(
             os.path.join(
                 get_semantic_world_directory_root(os.getcwd()),
                 "resources",
@@ -298,6 +299,8 @@ class ProcTHORTestCase(unittest.TestCase):
                 "house_987654321.json",
             )
         ).parse()
+
+        assert world is not None
 
     def test_procthor_views(self):
         """

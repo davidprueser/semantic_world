@@ -47,10 +47,6 @@ class WorldMapping(AlternativeMapping[World]):
         with result.modify_world():
             for entity in self.kinematic_structure_entities:
                 result.add_kinematic_structure_entity(entity)
-            for connection in self.connections:
-                result.add_connection(connection)
-            for view in self.views:
-                result.add_view(view)
             for dof in self.degrees_of_freedom:
                 d = DegreeOfFreedom(
                     name=dof.name,
@@ -58,6 +54,10 @@ class WorldMapping(AlternativeMapping[World]):
                     upper_limits=dof.upper_limits,
                 )
                 result.add_degree_of_freedom(d)
+            for connection in self.connections:
+                result.add_connection(connection)
+            for view in self.views:
+                result.add_view(view)
             result.delete_orphaned_dofs()
 
         return result
@@ -69,7 +69,9 @@ class Vector3Mapping(AlternativeMapping[Vector3]):
     y: float
     z: float
 
-    reference_frame: Optional[KinematicStructureEntity] = field(init=False, default=None)
+    reference_frame: Optional[KinematicStructureEntity] = field(
+        init=False, default=None
+    )
 
     @classmethod
     def create_instance(cls, obj: Vector3):
@@ -90,7 +92,9 @@ class Point3Mapping(AlternativeMapping[Point3]):
     y: float
     z: float
 
-    reference_frame: Optional[KinematicStructureEntity] = field(init=False, default=None)
+    reference_frame: Optional[KinematicStructureEntity] = field(
+        init=False, default=None
+    )
 
     @classmethod
     def create_instance(cls, obj: Point3):
@@ -110,7 +114,9 @@ class QuaternionMapping(AlternativeMapping[Quaternion]):
     z: float
     w: float
 
-    reference_frame: Optional[KinematicStructureEntity] = field(init=False, default=None)
+    reference_frame: Optional[KinematicStructureEntity] = field(
+        init=False, default=None
+    )
 
     @classmethod
     def create_instance(cls, obj: Quaternion):
@@ -132,7 +138,9 @@ class QuaternionMapping(AlternativeMapping[Quaternion]):
 @dataclass
 class RotationMatrixMapping(AlternativeMapping[RotationMatrix]):
     rotation: Quaternion
-    reference_frame: Optional[KinematicStructureEntity] = field(init=False, default=None)
+    reference_frame: Optional[KinematicStructureEntity] = field(
+        init=False, default=None
+    )
 
     @classmethod
     def create_instance(cls, obj: RotationMatrix):
@@ -150,7 +158,9 @@ class RotationMatrixMapping(AlternativeMapping[RotationMatrix]):
 class TransformationMatrixMapping(AlternativeMapping[TransformationMatrix]):
     position: Point3
     rotation: Quaternion
-    reference_frame: Optional[KinematicStructureEntity] = field(init=False, default=None)
+    reference_frame: Optional[KinematicStructureEntity] = field(
+        init=False, default=None
+    )
     child_frame: Optional[KinematicStructureEntity] = field(init=False, default=None)
 
     @classmethod
