@@ -22,6 +22,7 @@ from ..spatial_types import Vector3
 from ..spatial_types.spatial_types import TransformationMatrix
 from ..world import World
 from ..world_description.connections import FixedConnection
+from ..world_description.geometry import TriangleMesh
 from ..world_description.world_entity import Body, Region, KinematicStructureEntity
 
 if TYPE_CHECKING:
@@ -248,18 +249,18 @@ def is_body_in_region(body: Body, region: Region) -> float:
 @dataclass
 class SpatialRelation(Predicate, ABC):
     """
-    Check if the body is spatially related to the other body if you are looking from the point of view.
-    The comparison is done using the centers of mass computed from the bodies' collision geometry.
+    Check if the KSE is spatially related to the other KSE if you are looking from the point of view.
+    The comparison is done using the centers of mass computed from the KSE's collision geometry.
     """
 
-    body: Body
+    body: KinematicStructureEntity
     """
-    The body for which the check should be done.
+    The KSE for which the check should be done.
     """
 
-    other: Body
+    other: KinematicStructureEntity
     """
-    The other body.
+    The other KSE.
      """
 
 
@@ -300,12 +301,8 @@ class ViewDependentSpatialRelation(SpatialRelation, ABC):
             reference_frame=self.point_of_view.reference_frame,
         )
 
-        s_body = front_norm.dot(
-            self.body.collision.center_of_mass_in_world().to_vector3()
-        )
-        s_other = front_norm.dot(
-            self.other.collision.center_of_mass_in_world().to_vector3()
-        )
+        s_body = front_norm.dot(self.body.center_of_mass.to_vector3())
+        s_other = front_norm.dot(self.other.center_of_mass.to_vector3())
         return (s_body - s_other).compile()()
 
 
@@ -394,12 +391,12 @@ class InsideOf(SpatialRelation):
         """
         Compute the containment ratio of self.body inside self.other.
         """
-        if not self.other.collision:
+        if self.other.combined_mesh is None:
             return 0.0
 
         # Get meshes in their local (body) frames
-        mesh_a_local = self.body.collision.combined_mesh
-        mesh_b_local = self.other.collision.combined_mesh
+        mesh_a_local = self.body.combined_mesh
+        mesh_b_local = self.other.combined_mesh
 
         # Check if either mesh is empty
         if mesh_a_local.is_empty or mesh_b_local.is_empty:
