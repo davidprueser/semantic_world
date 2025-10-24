@@ -3,25 +3,23 @@ from __future__ import annotations
 from abc import abstractmethod, ABC
 from dataclasses import dataclass, field
 
-from random_events.utils import SubclassJSONSerializer, recursive_subclasses
+from random_events.utils import SubclassJSONSerializer
 from typing_extensions import (
     List,
     Dict,
     Any,
     Self,
-    Optional,
     Callable,
-    ClassVar,
     TYPE_CHECKING,
 )
 
 from .connection_factories import ConnectionFactory
 from .degree_of_freedom import DegreeOfFreedom
-from .world_entity import Body, KinematicStructureEntity
+from .world_entity import KinematicStructureEntity, View
 from ..datastructures.prefixed_name import PrefixedName
 
 if TYPE_CHECKING:
-    from ..world import World, FunctionStack
+    from ..world import World
 
 
 @dataclass
@@ -48,6 +46,9 @@ class WorldModelModification(SubclassJSONSerializer, ABC):
     This includes add/remove body and add/remove connection.
 
     All modifications are compared via the names of the objects they reference.
+
+    This class is referenced by the `atomic_world_modification` decorator and should be used for a method that
+    applies such a modification to the world.
     """
 
     @abstractmethod
@@ -62,7 +63,8 @@ class WorldModelModification(SubclassJSONSerializer, ABC):
     @abstractmethod
     def from_kwargs(cls, kwargs: Dict[str, Any]) -> Self:
         """
-        Factory to construct this change from the kwargs of a function call.
+        Factory to construct this change from the kwargs of its corresponding method in World decorated with
+        `atomic_world_modification(modification=cls)`.
 
         :param kwargs: The kwargs of the function call.
         :return: A new instance.
@@ -255,6 +257,50 @@ class RemoveDegreeOfFreedomModification(WorldModelModification):
 
 
 @dataclass
+class AddViewModification(WorldModelModification):
+    view: View
+
+    @classmethod
+    def from_kwargs(cls, kwargs: Dict[str, Any]):
+        return cls(view=kwargs["view"])
+
+    def apply(self, world: World):
+        world.add_view(self.view)
+
+    def to_json(self):
+        return {
+            **super().to_json(),
+            "view": self.view.to_json(),
+        }
+
+    @classmethod
+    def _from_json(cls, data: Dict[str, Any]) -> Self:
+        return cls(view=View.from_json(data["view"]))
+
+
+@dataclass
+class RemoveViewModification(WorldModelModification):
+    view: View
+
+    @classmethod
+    def from_kwargs(cls, kwargs: Dict[str, Any]):
+        return cls(view=kwargs["view"])
+
+    def apply(self, world: World):
+        world.remove_view(self.view)
+
+    def to_json(self):
+        return {
+            **super().to_json(),
+            "view": self.view.to_json(),
+        }
+
+    @classmethod
+    def _from_json(cls, data: Dict[str, Any]) -> Self:
+        return cls(view=View.from_json(data["view"]))
+
+
+@dataclass
 class WorldModelModificationBlock(SubclassJSONSerializer):
     """
     A sequence of WorldModelModifications that were applied to the world within one `with world.modify_world()` context.
@@ -291,3 +337,41 @@ class WorldModelModificationBlock(SubclassJSONSerializer):
 
     def append(self, modification: WorldModelModification):
         self.modifications.append(modification)
+
+
+@dataclass
+class SetDofHasHardwareInterface(WorldModelModification):
+    degree_of_freedom_names: List[PrefixedName]
+    value: bool
+
+    def apply(self, world: World):
+        for dof_name in self.degree_of_freedom_names:
+            world.get_degree_of_freedom_by_name(dof_name).has_hardware_interface = (
+                self.value
+            )
+
+    @classmethod
+    def from_kwargs(cls, kwargs: Dict[str, Any]) -> Self:
+        dofs = kwargs["dofs"]
+        degree_of_freedom_names = [dof.name for dof in dofs]
+        return cls(
+            degree_of_freedom_names=degree_of_freedom_names, value=kwargs["value"]
+        )
+
+    def to_json(self) -> Dict[str, Any]:
+        return {
+            **super().to_json(),
+            "degree_of_freedom_names": [
+                dof.to_json() for dof in self.degree_of_freedom_names
+            ],
+            "value": self.value,
+        }
+
+    @classmethod
+    def _from_json(cls, data: Dict[str, Any]) -> Self:
+        return cls(
+            degree_of_freedom_names=[
+                PrefixedName.from_json(dof) for dof in data["degree_of_freedom_names"]
+            ],
+            value=data["value"],
+        )

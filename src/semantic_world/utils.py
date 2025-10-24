@@ -1,13 +1,19 @@
 from __future__ import annotations
 
+import importlib
 import os
+import weakref
 from copy import deepcopy
 from dataclasses import dataclass
 from functools import lru_cache, wraps
 import trimesh
 from typing_extensions import Any, Tuple
+from ament_index_python import PackageNotFoundError
+from typing_extensions import Any, Tuple, Iterable
 from xml.etree import ElementTree as ET
 import weakref
+
+from typing_extensions import Any, Tuple
 
 
 class IDGenerator:
@@ -138,13 +144,27 @@ def rclpy_installed() -> bool:
 
 def tracy_installed() -> bool:
     try:
-        from ament_index_python.packages import has_package
+        from ament_index_python.packages import get_package_share_directory
+
         pkg_name = "iai_tracy_description"
 
-        if has_package(pkg_name):
+        if get_package_share_directory(pkg_name):
             return True
         return False
-    except ImportError:
+    except (ImportError, PackageNotFoundError, ValueError):
+        return False
+
+
+def hsrb_installed() -> bool:
+    try:
+        from ament_index_python.packages import get_package_share_directory
+
+        pkg_name = "hsr_description"
+
+        if get_package_share_directory(pkg_name):
+            return True
+        return False
+    except (ImportError, PackageNotFoundError, ValueError):
         return False
 
 
@@ -190,7 +210,11 @@ class VisualizeTrimesh:
         """
         self.scene.show(viewer=viewer, **kwargs)
 
-    def add_mesh(self, mesh: trimesh.Trimesh, color: Tuple[int, int, int, int] = (255, 255, 255, 255)):
+    def add_mesh(
+        self,
+        mesh: trimesh.Trimesh,
+        color: Tuple[int, int, int, int] = (255, 255, 255, 255),
+    ):
         """
         Add geometry to the scene.
         :param mesh: The geometry to add.
@@ -198,3 +222,15 @@ class VisualizeTrimesh:
         """
         mesh.visual.face_colors = color
         self.scene.add_geometry(mesh)
+
+
+def type_string_to_type(type_string: str) -> type:
+    """
+    Convert a string representation of a type to the actual type.
+
+    :param type_string: The string representation of the type, e.g., 'module.submodule.ClassName'.
+    :return: The actual type.
+    """
+    module_path, class_name = type_string.rsplit(".", 1)
+    module = importlib.import_module(module_path)
+    return getattr(module, class_name)

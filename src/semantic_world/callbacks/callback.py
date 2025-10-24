@@ -4,7 +4,10 @@ import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
-from typing_extensions import TYPE_CHECKING, Callable
+import numpy as np
+from typing_extensions import TYPE_CHECKING, Callable, Dict
+
+from ..datastructures.prefixed_name import PrefixedName
 
 if TYPE_CHECKING:
     from ..world import World
@@ -77,14 +80,38 @@ class StateChangeCallback(Callback, ABC):
     Callback for handling state changes.
     """
 
+    previous_world_state_data: np.ndarray = field(init=False)
+    """
+    The previous world state data used to check if something changed.
+    """
+
     def __post_init__(self):
         self.world.state_change_callbacks.append(self)
+        self.update_previous_world_state()
 
     def stop(self):
         try:
             self.world.state_change_callbacks.remove(self)
         except ValueError:
             pass
+
+    def update_previous_world_state(self):
+        """
+        Update the previous world state to reflect the current world positions.
+        """
+        self.previous_world_state_data = np.copy(self.world.state.positions)
+
+    def compute_state_changes(self) -> Dict[PrefixedName, float]:
+        changes = {
+            name: current_state
+            for name, previous_state, current_state in zip(
+                self.world.state.keys(),
+                self.previous_world_state_data,
+                self.world.state.positions,
+            )
+            if not np.allclose(previous_state, current_state)
+        }
+        return changes
 
 
 @dataclass

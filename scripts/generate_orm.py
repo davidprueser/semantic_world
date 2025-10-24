@@ -6,7 +6,7 @@ from ormatic.ormatic import ORMatic
 from ormatic.utils import classes_of_module, recursive_subclasses
 
 import semantic_world.world_description.degree_of_freedom
-import semantic_world.robots
+import semantic_world.robots.abstract_robot
 import semantic_world.views.views
 import semantic_world.reasoning.predicates
 import semantic_world.world_description.world_entity
@@ -21,7 +21,6 @@ from semantic_world.spatial_computations.forward_kinematics import (
 from semantic_world.world_description.connections import (
     FixedConnection,
     HasUpdateState,
-    Has1DOFState,
 )
 from semantic_world.orm.model import *
 from semantic_world.datastructures.prefixed_name import PrefixedName
@@ -44,8 +43,8 @@ classes |= set(classes_of_module(semantic_world.world_description.world_entity))
 classes |= set(classes_of_module(semantic_world.world_description.connections))
 classes |= set(classes_of_module(semantic_world.views.views))
 classes |= set(classes_of_module(semantic_world.world_description.degree_of_freedom))
-classes |= set(classes_of_module(semantic_world.robots))
-classes |= set([HouseholdObject]+recursive_subclasses(HouseholdObject))
+classes |= set(classes_of_module(semantic_world.robots.abstract_robot))
+classes |= set([HouseholdObject] + recursive_subclasses(HouseholdObject))
 classes |= set(classes_of_module(semantic_world.reasoning.predicates))
 
 # remove classes that should not be mapped
@@ -55,7 +54,6 @@ classes -= {
     HasUpdateState,
     World,
     ForwardKinematicsVisitor,
-    Has1DOFState,
     DegreeOfFreedom,
 }
 classes -= set(recursive_subclasses(Enum))

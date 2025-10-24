@@ -9,6 +9,9 @@ from ...views.factories import (
     DrawerFactory,
     DoorFactory,
     DresserFactory,
+    SemanticPositionDescription,
+    HorizontalSemanticDirection,
+    VerticalSemanticDirection,
 )
 from ...world_description.geometry import Scale
 from ...world_description.world_entity import Body
@@ -33,9 +36,11 @@ def drawer_factory_from_body(drawer: Body) -> DrawerFactory:
         .scale,
         direction=Direction.Z,
     )
+    drawer_T_handle = TransformationMatrix.from_xyz_rpy(x=container_factory.scale.x / 2)
     drawer_factory = DrawerFactory(
         name=drawer.name,
         handle_factory=handle_factory,
+        parent_T_handle=drawer_T_handle,
         container_factory=container_factory,
     )
     return drawer_factory
@@ -60,7 +65,13 @@ def door_factory_from_body(door: Body) -> DoorFactory:
         .bounding_boxes[0]
         .scale,
         handle_factory=handle_factory,
-        handle_direction=Direction.Y,
+        semantic_position=SemanticPositionDescription(
+            horizontal_direction_chain=[
+                HorizontalSemanticDirection.RIGHT,
+                HorizontalSemanticDirection.FULLY_CENTER,
+            ],
+            vertical_direction_chain=[VerticalSemanticDirection.FULLY_CENTER],
+        ),
     )
     return door_factory
 
@@ -103,7 +114,7 @@ def dresser_factory_from_body(dresser: Body) -> DresserFactory:
         name=dresser.name,
         container_factory=dresser_container_factory,
         drawers_factories=drawer_factories,
-        drawer_transforms=drawer_transforms,
+        parent_T_drawers=drawer_transforms,
         door_factories=door_factories,
         door_transforms=door_transforms,
     )

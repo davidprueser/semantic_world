@@ -200,7 +200,7 @@ class URDFParser:
         translation_offset = getattr(joint.origin, "xyz", [0, 0, 0])
         rotation_offset = getattr(joint.origin, "rpy", [0, 0, 0])
 
-        parent_T_child = cas.TransformationMatrix.from_xyz_rpy(
+        parent_T_connection = cas.TransformationMatrix.from_xyz_rpy(
             x=translation_offset[0],
             y=translation_offset[1],
             z=translation_offset[2],
@@ -213,7 +213,7 @@ class URDFParser:
                 name=connection_name,
                 parent=parent,
                 child=child,
-                origin_expression=parent_T_child,
+                parent_T_connection_expression=parent_T_connection,
             )
 
         lower_limits, upper_limits = urdf_joint_to_limits(joint)
@@ -236,15 +236,16 @@ class URDFParser:
             )
             world.add_degree_of_freedom(dof)
 
+        assert joint.axis is not None, f"Joint axis is None for joint {joint.name}"
         result = connection_type(
             name=connection_name,
             parent=parent,
             child=child,
-            origin_expression=parent_T_child,
+            parent_T_connection_expression=parent_T_connection,
             multiplier=multiplier,
             offset=offset,
             axis=Vector3(*map(int, joint.axis), reference_frame=parent),
-            dof=dof,
+            dof_name=dof.name,
         )
         return result
 
@@ -357,7 +358,7 @@ class URDFParser:
                 from ament_index_python.packages import get_package_share_directory
 
                 package_path = get_package_share_directory(package_name)
-            except ImportError:
+            except (ImportError, LookupError):
                 if self.package_resolver:
                     if package_name in self.package_resolver:
                         package_path = self.package_resolver[package_name]

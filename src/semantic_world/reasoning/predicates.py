@@ -1,42 +1,34 @@
-import itertools
+from __future__ import annotations
 from abc import ABC
 from dataclasses import dataclass
 
 import numpy as np
 import trimesh.boolean
 from entity_query_language import (
-    let,
-    an,
-    entity,
-    contains,
-    and_,
-    not_,
-    the,
-    symbolic_mode,
     Predicate,
 )
 from random_events.interval import Interval
-from typing_extensions import List, Optional
+from typing_extensions import List, TYPE_CHECKING, Iterable, Type
 
-from ..collision_checking.collision_detector import CollisionCheck, Collision
 from ..collision_checking.trimesh_collision_detector import TrimeshCollisionDetector
 from ..datastructures.prefixed_name import PrefixedName
 from ..datastructures.variables import SpatialVariables
-from ..robots import (
-    Camera,
-    AbstractRobot,
-    ParallelGripper,
-)
 from ..spatial_computations.ik_solver import (
     MaxIterationsException,
     UnreachableException,
 )
 from ..spatial_computations.raytracer import RayTracer
 from ..spatial_types import Vector3
-from ..spatial_types.spatial_types import TransformationMatrix, Point3
+from ..spatial_types.spatial_types import TransformationMatrix
 from ..world import World
 from ..world_description.connections import FixedConnection
+from ..world_description.geometry import TriangleMesh
 from ..world_description.world_entity import Body, Region, KinematicStructureEntity
+
+if TYPE_CHECKING:
+    from ..robots.abstract_robot import (
+        Camera,
+    )
 
 
 def stable(obj: Body) -> bool:
@@ -70,67 +62,6 @@ def contact(
     if result is None:
         return False
     return result.contact_distance < threshold
-
-
-def robot_in_collision(
-    robot: AbstractRobot,
-    ignore_collision_with: Optional[List[Body]] = None,
-    threshold: float = 0.001,
-) -> List[Collision]:
-    """
-    Check if the robot collides with any object in the world at the given pose.
-
-    :param robot: The robot object
-    :param ignore_collision_with: A list of objects to ignore collision with
-    :param threshold: The threshold for contact detection
-    :return: True if the robot collides with any object, False otherwise
-    """
-
-    if ignore_collision_with is None:
-        ignore_collision_with = []
-
-    with symbolic_mode():
-        body = let(type_=Body, domain=robot._world.bodies_with_enabled_collision)
-        possible_collisions_bodies = an(
-            entity(
-                body,
-                and_(
-                    not_(contains(robot.bodies, body)),
-                    not_(contains(ignore_collision_with, body)),
-                ),
-            ),
-        )
-    possible_collisions_bodies = possible_collisions_bodies.evaluate()
-
-    tcd = TrimeshCollisionDetector(robot._world)
-
-    collisions = tcd.check_collisions(
-        {
-            CollisionCheck(robot_body, collision_body, threshold, robot._world)
-            for robot_body, collision_body in itertools.product(
-                robot.bodies_with_collisions, possible_collisions_bodies
-            )
-        }
-    )
-    return collisions
-
-
-def robot_holds_body(robot: AbstractRobot, body: Body) -> bool:
-    """
-    Check if a robot is holding an object.
-
-    :param robot: The robot object
-    :param body: The body to check if it is picked
-    :return: True if the robot is holding the object, False otherwise
-    """
-    with symbolic_mode():
-        grippers = an(
-            entity(g := let(ParallelGripper, robot._world.views), g._robot == robot)
-        )
-
-    return any(
-        [is_body_in_gripper(body, gripper) > 0.0 for gripper in grippers.evaluate()]
-    )
 
 
 def get_visible_bodies(camera: Camera) -> List[KinematicStructureEntity]:
@@ -188,11 +119,13 @@ def occluding_bodies(camera: Camera, body: Body) -> List[Body]:
     with world_without_occlusion.modify_world():
         world_without_occlusion.add_body(root)
         copied_body = Body.from_json(body.to_json())
+        root_T_body = body.global_pose
+        root_T_body.reference_frame = root
         root_to_copied_body = FixedConnection(
             parent=root,
             child=copied_body,
             _world=world_without_occlusion,
-            origin_expression=body.global_pose,
+            parent_T_connection_expression=root_T_body,
         )
         world_without_occlusion.add_connection(root_to_copied_body)
 
@@ -246,32 +179,6 @@ def reachable(pose: TransformationMatrix, root: Body, tip: Body) -> bool:
     return True
 
 
-def blocking(
-    pose: TransformationMatrix,
-    root: Body,
-    tip: Body,
-) -> List[Collision]:
-    """
-    Get the bodies that are blocking the robot from reaching a given position.
-    The blocking are all bodies that are in collision with the robot when reaching for the pose.
-
-    :param pose: The pose to reach
-    :param root: The root of the kinematic chain.
-    :param tip: The threshold between the end effector and the position.
-    :return: A list of bodies the robot is in collision with when reaching for the specified object or None if the pose or object is not reachable.
-    """
-    result = root._world.compute_inverse_kinematics(
-        root=root, tip=tip, target=pose, max_iterations=1000
-    )
-    with root._world.modify_world():
-        for dof, state in result.items():
-            root._world.state[dof.name].position = state
-
-    with symbolic_mode():
-        robot = the(entity(r := let(AbstractRobot, root._world.views), tip in r.bodies))
-    return robot_in_collision(robot.evaluate(), [])
-
-
 def is_supported_by(
     supported_body: Body, supporting_body: Body, max_intersection_height: float = 0.1
 ) -> bool:
@@ -309,43 +216,6 @@ def is_supported_by(
     return size < max_intersection_height
 
 
-def is_body_in_gripper(
-    body: Body, gripper: ParallelGripper, sample_size: int = 100
-) -> float:
-    """
-    Check if the body in the gripper.
-
-    This method samples random rays between the finger and the thumb and returns the marginal probability that the rays
-    intersect.
-
-    :param body: The body for which the check should be done.
-    :param gripper: The gripper for which the check should be done.
-    :param sample_size: The number of rays to sample.
-
-    :return: The percentage of rays between the fingers that hit the body.
-    """
-
-    # Retrieve meshes in local frames
-    thumb_mesh = gripper.thumb.tip.collision.combined_mesh.copy()
-    finger_mesh = gripper.finger.tip.collision.combined_mesh.copy()
-    body_mesh = body.collision.combined_mesh.copy()
-
-    # Transform copies of the meshes into the world frame
-    body_mesh.apply_transform(body.global_pose.to_np())
-    thumb_mesh.apply_transform(gripper.thumb.tip.global_pose.to_np())
-    finger_mesh.apply_transform(gripper.finger.tip.global_pose.to_np())
-
-    # get random points from thumb mesh
-    finger_points = trimesh.sample.sample_surface(finger_mesh, sample_size)[0]
-    thumb_points = trimesh.sample.sample_surface(thumb_mesh, sample_size)[0]
-
-    rt = RayTracer(gripper._world)
-    rt.update_scene()
-
-    points, index_ray, bodies = rt.ray_test(finger_points, thumb_points)
-    return len([b for b in bodies if b == body]) / sample_size
-
-
 def is_body_in_region(body: Body, region: Region) -> float:
     """
     Check if the body is in the region by computing the fraction of the body's
@@ -379,18 +249,18 @@ def is_body_in_region(body: Body, region: Region) -> float:
 @dataclass
 class SpatialRelation(Predicate, ABC):
     """
-    Check if the body is spatially related to the other body if you are looking from the point of view.
-    The comparison is done using the centers of mass computed from the bodies' collision geometry.
+    Check if the KSE is spatially related to the other KSE if you are looking from the point of view.
+    The comparison is done using the centers of mass computed from the KSE's collision geometry.
     """
 
-    body: Body
+    body: KinematicStructureEntity
     """
-    The body for which the check should be done.
+    The KSE for which the check should be done.
     """
 
-    other: Body
+    other: KinematicStructureEntity
     """
-    The other body.
+    The other KSE.
      """
 
 
@@ -431,12 +301,8 @@ class ViewDependentSpatialRelation(SpatialRelation, ABC):
             reference_frame=self.point_of_view.reference_frame,
         )
 
-        s_body = front_norm.dot(
-            self.body.collision.center_of_mass_in_world().to_vector3()
-        )
-        s_other = front_norm.dot(
-            self.other.collision.center_of_mass_in_world().to_vector3()
-        )
+        s_body = front_norm.dot(self.body.center_of_mass.to_vector3())
+        s_other = front_norm.dot(self.other.center_of_mass.to_vector3())
         return (s_body - s_other).compile()()
 
 
@@ -525,12 +391,12 @@ class InsideOf(SpatialRelation):
         """
         Compute the containment ratio of self.body inside self.other.
         """
-        if not self.other.collision:
+        if self.other.combined_mesh is None:
             return 0.0
 
         # Get meshes in their local (body) frames
-        mesh_a_local = self.body.collision.combined_mesh
-        mesh_b_local = self.other.collision.combined_mesh
+        mesh_a_local = self.body.combined_mesh
+        mesh_b_local = self.other.combined_mesh
 
         # Check if either mesh is empty
         if mesh_a_local.is_empty or mesh_b_local.is_empty:
@@ -553,3 +419,22 @@ class InsideOf(SpatialRelation):
         if len(inside) == 0:
             return 0.0
         return sum(inside) / len(inside)
+
+
+class ContainsType(Predicate):
+    """
+    Predicate that checks if any object in the iterable is of the given type.
+    """
+
+    iterable: Iterable
+    """
+    Iterable to check for objects of the given type.
+    """
+
+    obj_type: Type
+    """
+    Object type to check for.
+    """
+
+    def __call__(self) -> bool:
+        return any(isinstance(obj, self.obj_type) for obj in self.iterable)
