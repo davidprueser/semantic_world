@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from functools import cached_property
 from typing import Optional
 
+import trimesh
 from entity_query_language import symbol
 from probabilistic_model.probabilistic_circuit.rx.helper import uniform_measure_of_event
 from random_events.interval import SimpleInterval
@@ -142,39 +143,37 @@ class Drawer(Components):
         """
         Create a region that represents the drawer's surface.
         """
+
         mesh = self.container.body.collision.combined_mesh
-        upward_threshold = 0.99
-        height_tolerance = 0.005
+        upward_threshold = 0.95
         clearance_threshold = 0.5
+        min_surface_area = 0.0225 # 15cm x 15cm
 
         # --- Find upward-facing faces ---
         normals = mesh.face_normals
         upward_mask = normals[:, 2] > upward_threshold
 
-        face_centers = mesh.triangles_center
-        z_values = face_centers[:, 2]
-
-        # --- Find the lowest upward-facing surface ---
         if not upward_mask.any():
             raise ValueError("No upward-facing faces found.")
 
-        lowest_surface = np.min(z_values[upward_mask])
+        # --- Find connected upward-facing regions ---
+        upward_face_indices = np.nonzero(upward_mask)[0]
+        submesh_up = mesh.submesh([upward_face_indices], append=True)
+        face_groups = submesh_up.split(only_watertight=False)
 
-        low = lowest_surface - height_tolerance
-        high = lowest_surface + height_tolerance
-        acceptable_height = SimpleInterval(low, high)
+        # Compute total area for each group
+        large_groups = [
+            g for g in face_groups if g.area >= min_surface_area
+        ]
 
-        # Select faces that are both upward and near the lowest surface
-        in_tolerance_mask = np.array(
-            [acceptable_height.contains(value) for value in z_values]
-        )
-        candidate_mask = upward_mask & in_tolerance_mask
+        if not large_groups:
+            raise ValueError("No upward-facing connected surfaces ≥ 20cm x 20cm found.")
 
-        if not candidate_mask.any():
-            raise ValueError("No upward-facing faces within height tolerance.")
+        # --- Merge qualifying upward-facing submeshes ---
+        candidates = trimesh.util.concatenate(large_groups)
 
         # --- Check vertical clearance using ray casting ---
-        face_centers = face_centers[candidate_mask]
+        face_centers = candidates.triangles_center
         ray_origins = face_centers + np.array([0, 0, 0.01])  # small upward offset
         ray_dirs = np.tile([0, 0, 1], (len(ray_origins), 1))
 
@@ -191,20 +190,15 @@ class Drawer(Components):
         # Filter faces with enough space above
         clear_mask = (distances > clearance_threshold) | np.isinf(distances)
 
-        # --- Apply clearance mask back to the full mesh ---
-        final_mask = np.zeros(len(mesh.faces), dtype=bool)
-        candidate_indices = np.nonzero(candidate_mask)[0]
-        final_mask[candidate_indices[clear_mask]] = True
+        if not clear_mask.any():
+            raise ValueError("No upward-facing surfaces with sufficient clearance found.")
 
-        if not final_mask.any():
-            raise ValueError("No candidate faces with sufficient clearance found.")
+        candidates_filtered = candidates.submesh([clear_mask], append=True)
 
-        # --- Build the submesh and region ---
-        candidates = mesh.submesh([final_mask], append=True)
-
+        # --- Build the region ---
         points_3d = [
             Point3(x, y, z, reference_frame=self.container.body)
-            for x, y, z in candidates.vertices
+            for x, y, z in candidates_filtered.vertices
         ]
 
         drawer_surface_region = Region.from_3d_points(
