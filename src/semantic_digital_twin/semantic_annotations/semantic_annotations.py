@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from functools import cached_property
 import trimesh
-from entity_query_language import symbol
 import numpy as np
+from krrood.entity_query_language.predicate import Symbol
 from probabilistic_model.probabilistic_circuit.rx.helper import uniform_measure_of_event
 from typing_extensions import List
 from ..datastructures.prefixed_name import PrefixedName
@@ -12,11 +12,13 @@ from ..world_description.shape_collection import BoundingBoxCollection
 from ..spatial_types import Point3
 from ..datastructures.variables import SpatialVariables
 from ..world_description.world_entity import SemanticAnnotation, Body, Region
+
+
 ############################### supporting surfaces
 @dataclass(eq=False)
 class SupportingSurface:
     """
-    A view that represents a supporting surface.
+    A semantic annotation that represents a supporting surface.
     """
 
     @cached_property
@@ -100,9 +102,8 @@ class SupportingSurface:
 
 
 ############################### furniture
-@symbol
 @dataclass(eq=False)
-class Container(SemanticAnnotation):
+class Container(SemanticAnnotation, Symbol):
     body: Body
 
 
@@ -147,7 +148,7 @@ class Table(SemanticAnnotation, SupportingSurface):
 
 
 @dataclass(eq=False)
-class Wall(View):
+class Wall(SemanticAnnotation):
     body: Body
     """
     The body that represents the wall.
@@ -159,9 +160,8 @@ class Wall(View):
     """
 
 
-@symbol
 @dataclass(eq=False)
-class Handle(View):
+class Handle(SemanticAnnotation, Symbol):
     body: Body
     """
     The body that the handle is attached to.
@@ -184,7 +184,7 @@ class Furniture(SemanticAnnotation): ...
 @dataclass(eq=False)
 class Room(Components, SupportingSurface):
     """
-    A view that represents a closed area with a specific purpose
+    A semantic annotation that represents a closed area with a specific purpose
     """
 
 @dataclass(eq=False)

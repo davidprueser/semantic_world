@@ -421,7 +421,7 @@ class InsideOf(SpatialRelation):
         return sum(inside) / len(inside)
 
 
-@dataclass
+# @dataclass
 class ContainsType(Predicate):
     """
     Predicate that checks if any object in the iterable is of the given type.

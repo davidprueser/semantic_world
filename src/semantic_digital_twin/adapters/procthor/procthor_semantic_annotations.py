@@ -8,10 +8,9 @@ from typing_extensions import List, Self
 from typing import ClassVar, Optional, Iterable, Tuple, Type, Dict, Set
 import re
 
-from ...views.views import Furniture, Table, Container, SupportingSurface
+from semantic_digital_twin.semantic_annotations.semantic_annotations import Furniture, Table, Container, SupportingSurface
 
-# Reuse the common world/view primitives so ProcTHOR views integrate seamlessly.
-from ...world_description.world_entity import View, Body, Region
+from ...world_description.world_entity import SemanticAnnotation, Body, Region
 import re
 from abc import ABC
 from dataclasses import dataclass
@@ -33,11 +32,11 @@ def camel_case_split(word: str) -> List[str]:
 
 
 class AmbiguousNameError(ValueError):
-    """Raised when more than one view class matches a given name with the same score."""
+    """Raised when more than one semantic annotation class matches a given name with the same score."""
 
 
 class UnresolvedNameError(ValueError):
-    """Raised when no view class matches a given name."""
+    """Raised when no semantic annotation class matches a given name."""
 
 
 @dataclass
@@ -71,9 +70,9 @@ class ProcthorResolver:
 
 
 @dataclass(eq=False)
-class HouseholdObject(View, ABC):
+class HouseholdObject(SemanticAnnotation, ABC):
     """
-    Abstract base class for all household objects. Each view refers to a single Body.
+    Abstract base class for all household objects. Each semantic annotation refers to a single Body.
     Each subclass automatically derives a MatchRule from its own class name and
     the names of its HouseholdObject ancestors. This makes specialized subclasses
     naturally more specific than their bases.
@@ -348,12 +347,10 @@ class ShelvingUnit(Furniture, HouseholdObject, SupportingSurface):
 
 
 @dataclass(eq=False)
-class Bed(Furniture, HouseholdObject):
+class Bed(Furniture, HouseholdObject, SupportingSurface):
     """
     A bed.
     """
-
-    bed_surface: Optional[BedSurface] = None
 
 
 @dataclass(eq=False)

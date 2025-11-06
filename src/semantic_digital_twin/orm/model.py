@@ -1,15 +1,12 @@
 from dataclasses import dataclass, field
 from io import BytesIO
-from typing_extensions import List
-from typing_extensions import Optional
-
 import numpy as np
 import trimesh
 import trimesh.exchange.stl
+from krrood.entity_query_language.predicate import Symbol
 from krrood.ormatic.dao import AlternativeMapping
 from sqlalchemy import TypeDecorator, types
-from typing_extensions import List
-from typing_extensions import Optional
+from typing_extensions import List, Optional
 
 from ..datastructures.prefixed_name import PrefixedName
 from ..spatial_types import RotationMatrix, Vector3, Point3, TransformationMatrix
@@ -26,9 +23,8 @@ from ..world_description.world_entity import (
 from ..world_description.world_state import WorldState
 
 
-@symbol
 @dataclass
-class WorldMapping(AlternativeMapping[World]):
+class WorldMapping(AlternativeMapping[World], Symbol):
     kinematic_structure_entities: List[KinematicStructureEntity]
     connections: List[Connection]
     semantic_annotations: List[SemanticAnnotation]

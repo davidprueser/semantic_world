@@ -1189,7 +1189,7 @@ class RoomFactory(SemanticAnnotationFactory[Room]):
         room_semantic_annotation = Room(name=self.name)
         room_semantic_annotation.surface_region = region
 
-        world.add_view(room_view)
+        world.add_semantic_annotation(room_semantic_annotation)
 
         return world
 

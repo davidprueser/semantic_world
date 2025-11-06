@@ -17,7 +17,7 @@ from semantic_digital_twin.adapters.procthor.procthor_pipelines import (
     dresser_factory_from_body,
 )
 from semantic_digital_twin.orm.ormatic_interface import *
-from semantic_digital_twin.adapters.procthor.procthor_views import ProcthorResolver, HouseholdObject
+from semantic_digital_twin.adapters.procthor.procthor_semantic_annotations import ProcthorResolver, HouseholdObject
 from semantic_digital_twin.pipeline.pipeline import (
     Pipeline,
     BodyFilter,
