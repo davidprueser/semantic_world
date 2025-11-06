@@ -15,11 +15,11 @@
 import os
 import sys
 
-sys.path.insert(0, os.path.abspath(os.path.join("..", "src", "semantic_world")))
+sys.path.insert(0, os.path.abspath(os.path.join("..", "src", "semantic_digital_twin")))
 
 # -- Project information -----------------------------------------------------
 
-project = "semantic_world"
+project = "semantic_digital_twin"
 copyright = "2025, AICOR Institute for Artificial Intelligence"
 author = "AICOR Institute for Artificial Intelligence"
 

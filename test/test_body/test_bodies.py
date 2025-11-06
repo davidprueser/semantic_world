@@ -3,12 +3,12 @@ import unittest
 
 import trimesh.boolean
 
-from semantic_world.adapters.mesh import STLParser
-from semantic_world.world_description.geometry import Box
-from semantic_world.datastructures.prefixed_name import PrefixedName
-from semantic_world.spatial_types.spatial_types import TransformationMatrix
-from semantic_world.world_description.shape_collection import ShapeCollection
-from semantic_world.world_description.world_entity import Body
+from semantic_digital_twin.adapters.mesh import STLParser
+from semantic_digital_twin.world_description.geometry import Box
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.spatial_types.spatial_types import TransformationMatrix
+from semantic_digital_twin.world_description.shape_collection import ShapeCollection
+from semantic_digital_twin.world_description.world_entity import Body
 
 
 class JSONTestCase(unittest.TestCase):

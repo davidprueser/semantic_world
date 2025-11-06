@@ -8,7 +8,7 @@ import numpy as np
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from semantic_world.adapters.procthor.procthor_parser import (
+from semantic_digital_twin.adapters.procthor.procthor_parser import (
     ProcTHORParser,
     ProcthorRoom,
     unity_to_semantic_digital_twin_transform,
@@ -16,11 +16,11 @@ from semantic_world.adapters.procthor.procthor_parser import (
     ProcthorWall,
     ProcthorObject,
 )
-from semantic_world.adapters.procthor.procthor_views import ProcthorResolver, Bread
-from semantic_world.spatial_types.spatial_types import TransformationMatrix
-from semantic_world.utils import get_semantic_world_directory_root
-from semantic_world.world_description.geometry import Scale
-from semantic_world.world_description.world_entity import Region
+from semantic_digital_twin.adapters.procthor.procthor_semantic_annotations import ProcthorResolver, Bread
+from semantic_digital_twin.spatial_types.spatial_types import TransformationMatrix
+from semantic_digital_twin.utils import get_semantic_digital_twin_directory_root
+from semantic_digital_twin.world_description.geometry import Scale
+from semantic_digital_twin.world_description.world_entity import Region
 
 
 class ProcTHORTestCase(unittest.TestCase):
@@ -252,10 +252,12 @@ class ProcTHORTestCase(unittest.TestCase):
     def test_world_T_obj(self):
         objects = self.house_json["objects"][0]
 
-        semantic_world_database_uri = os.environ.get("SEMANTIC_WORLD_DATABASE_URI")
+        semantic_digital_twin_database_uri = os.environ.get(
+            "semantic_digital_twin_DATABASE_URI"
+        )
 
         # Create database engine and session
-        engine = create_engine(f"mysql+pymysql://{semantic_world_database_uri}")
+        engine = create_engine(f"mysql+pymysql://{semantic_digital_twin_database_uri}")
         session = Session(engine)
 
         procthor_object = ProcthorObject(object_dict=objects, session=session)
@@ -279,10 +281,12 @@ class ProcTHORTestCase(unittest.TestCase):
     def test_object_get_world(self):
         objects = self.house_json["objects"][0]
 
-        semantic_world_database_uri = os.environ.get("SEMANTIC_WORLD_DATABASE_URI")
+        semantic_digital_twin_database_uri = os.environ.get(
+            "semantic_digital_twin_DATABASE_URI"
+        )
 
         # Create database engine and session
-        engine = create_engine(f"mysql+pymysql://{semantic_world_database_uri}")
+        engine = create_engine(f"mysql+pymysql://{semantic_digital_twin_database_uri}")
         session = Session(engine)
 
         procthor_object = ProcthorObject(object_dict=objects, session=session)
@@ -293,7 +297,7 @@ class ProcTHORTestCase(unittest.TestCase):
     def test_parse_full_world(self):
         world = ProcTHORParser.from_file(
             os.path.join(
-                get_semantic_world_directory_root(os.getcwd()),
+                get_semantic_digital_twin_directory_root(os.getcwd()),
                 "resources",
                 "procthor_json",
                 "house_987654321.json",

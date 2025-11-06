@@ -1,4 +1,4 @@
-# Semantic World Guidelines
+# Semantic Digital Twin Guidelines
 
 ## Testing
 - If you need to run tests, execute them with pytest
@@ -9,7 +9,7 @@
 - Do not use abbreviations
 - Create classes instead of using too many primitives
 - Minimize duplication of code
-- Use the semantic_world/doc/styleguide.md for naming transformation variables
+- Use the semantic_digital_twin/doc/styleguide.md for naming transformation variables
 - Do not wrap attribute access in try-except blocks
 - Always access attributes via ".", NEVER use getattr
 - Use existing packages whenever possible
@@ -18,7 +18,7 @@
 
 ## Design Principles
 - Always apply the SOLID principles of object-oriented programming 
-- If you have to create new view classes, stick to the design of existing views found in semantic_world.views.views
+- If you have to create new semantic annotation classes, stick to the design of existing semantic annotations found in semantic_digital_twin.semantic_annotations.semantic_annotations
 - Create meaningful custom exceptions
 - Eliminate YAGNI smells
 - Make interfaces hard to misuse

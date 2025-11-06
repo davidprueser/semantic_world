@@ -1,8 +1,8 @@
 import os
 import unittest
 
-from semantic_world.adapters.mesh import STLParser
-from semantic_world.world_description.geometry import FileMesh
+from semantic_digital_twin.adapters.mesh import STLParser
+from semantic_digital_twin.world_description.geometry import FileMesh
 
 
 class STLAdapterTestCase(unittest.TestCase):

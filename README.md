@@ -1,15 +1,15 @@
-# Welcome to the Semantic World Package
-Introducing Semantic World: A unified interface for scene data and asserted meaning.
+# Welcome to the Semantic Digital Twin Package
+Introducing Semantic Digital Twin: A unified interface for scene data and asserted meaning.
 
-The Semantic World Python package streamlines the integration and management of scene graphs with explicit semantic assertions.
+The Semantic Digital Twin Python package streamlines the integration and management of scene graphs with explicit semantic assertions.
 Agents and autonomous systems require more than just coordinates, they need contextual understanding. 
-Semantic World bridges geometry, kinematics, and meaning, allowing systems for planning, 
+Semantic Digital Twin bridges geometry, kinematics, and meaning, allowing systems for planning, 
 learning, and reasoning to process the environment through actionable, high-level concepts.
 
 This enables the construction of environments that can be readily understood,
 queried, transformed, and shared across projects.
 Whether for research prototypes or robust data pipelines,
-Semantic World translates raw environment data into structured knowledge.
+Semantic Digital Twin translates raw environment data into structured knowledge.
 
 ## Assimilated Technologies
 
@@ -53,11 +53,11 @@ real-time world synchronization.
 Structures can be created, merged, and updated at once, 
 ensuring they are accurately reflected across all connected instances.
 
-🚀 Get started with the [user-guide](https://cram2.github.io/semantic_world/user_guide.html#user-guide)!
+🚀 Get started with the [user-guide](https://cram2.github.io/semantic_digital_twin/user_guide.html#user-guide)!
 
-📖 Read the full [documentation](https://cram2.github.io/semantic_world/intro.html)!
+📖 Read the full [documentation](https://cram2.github.io/semantic_digital_twin/intro.html)!
 
-🤝 Contribute with the [developer-guide](https://cram2.github.io/semantic_world/developer_guide.html#developer-guide)!
+🤝 Contribute with the [developer-guide](https://cram2.github.io/semantic_digital_twin/developer_guide.html#developer-guide)!
 
 
 # User Installation
@@ -66,7 +66,7 @@ ensuring they are accurately reflected across all connected instances.
 You can install the package directly from PyPI:
 
 ```bash
-pip install -U semantic_world
+pip install -U semantic_digital_twin
 ```
 
 # Contributing
@@ -74,7 +74,7 @@ pip install -U semantic_world
 If you are interested in contributing, you can check out the source code from GitHub:
 
 ```bash
-git clone https://github.com/cram2/semantic_world.git
+git clone https://github.com/cram2/semantic_digital_twin.git
 ```
 
 ### Development Dependencies
@@ -86,7 +86,7 @@ pip install -r requirements.txt
 
 
 # Tests
-The tests can be run with `pytest` directly in PyCharm or from the terminal after installing Semantic World as a python package.
+The tests can be run with `pytest` directly in PyCharm or from the terminal after installing Semantic Digital Twin as a python package.
 
 ```bash
 pip install -e .

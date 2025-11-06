@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from semantic_world.testing import world_setup_simple
+from semantic_digital_twin.testing import world_setup_simple
 
 
 def test_closest_points(world_setup_simple):

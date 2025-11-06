@@ -31,23 +31,23 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with:
-        path: "ros/src/semantic_world"
+        path: "ros/src/semantic_digital_twin"
         repository: ${{ github.repository }}
         ref: ${{ github.ref }}
         submodules: 'false'
 
-    - name: Update semantic_world source files
+    - name: Update semantic_digital_twin source files
       run: |
-        rm -rf /opt/ros/semantic_world/* 
-        cd /opt/ros/semantic_world
+        rm -rf /opt/ros/semantic_digital_twin/* 
+        cd /opt/ros/semantic_digital_twin
         rm -rf .git .github .gitignore .gitmodules .readthedocs.yaml
-        cp -r /__w/${{ github.event.repository.name }}/${{ github.event.repository.name }}/ros/src/semantic_world /opt/ros
+        cp -r /__w/${{ github.event.repository.name }}/${{ github.event.repository.name }}/ros/src/semantic_digital_twin /opt/ros
 
     - name: Install dependencies
       run: |
         sudo apt-get update
-        cd /opt/ros/semantic_world
-        source /opt/ros/semantic_world-venv/bin/activate
+        cd /opt/ros/semantic_digital_twin
+        source /opt/ros/semantic_digital_twin-venv/bin/activate
         pip install -U pip && pip install -r requirements.txt && pip install . && pip install -r doc/requirements.txt
 
     # (optional) Cache your executed notebooks between runs
@@ -60,12 +60,35 @@ jobs:
         path: doc/_build/.jupyter_cache
         key: jupyter-book-cache-${{ hashFiles('requirements.txt') }}
 
+    - name: Strip exercise-tagged cells in self_assessment/exercises/
+      run: |
+        cd /opt/ros/semantic_digital_twin/doc/self_assessment/exercises
+        source /opt/ros/semantic_digital_twin-venv/bin/activate
+        find . -type f -name '*.md' -print0 | while IFS= read -r -d '' f; do
+          ipynb="${f%.md}.ipynb"
+          # md:myst -> ipynb
+          jupytext --from md:myst --to ipynb "$f" -o "$ipynb"
+          # drop cells tagged "exercise"
+          jupyter nbconvert --config /opt/ros/semantic_digital_twin/scripts/configs/nb_remove_exercises.json \
+            --to notebook --inplace \
+            "$ipynb"
+          # ipynb -> md:myst (overwrite original .md)
+          jupytext --to md:myst "$ipynb" -o "$f"
+          rm -f "$ipynb"
+        done
+
+    - name: Install Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+
     # Build the book
     - name: Build the book
       run: |
-        cd /opt/ros/semantic_world
+        cd /opt/ros/semantic_digital_twin
         source /opt/ros/overlay_ws/install/setup.bash
-        source /opt/ros/semantic_world-venv/bin/activate
+        source /opt/ros/semantic_digital_twin-venv/bin/activate
         jupyter-book build doc
 
     # Upload the book's HTML as an artifact
@@ -73,7 +96,7 @@ jobs:
       if: github.event_name == 'push'
       uses: actions/upload-pages-artifact@v3
       with:
-        path: "/opt/ros/semantic_world/doc/_build/html"
+        path: "/opt/ros/semantic_digital_twin/doc/_build/html"
 
     # Deploy the book's HTML to GitHub Pages
     - name: Deploy to GitHub Pages

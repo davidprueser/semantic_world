@@ -8,28 +8,44 @@ parts:
   chapters:
     - file: user_guide
       sections:
+        - file: examples/using_transformations
         - file: examples/creating_custom_bodies
         - file: examples/loading_worlds
         - file: examples/visualizing_worlds
-        - file: examples/views
-        - file: examples/world_state_manipulation
         - file: examples/world_structure_manipulation
+        - file: examples/semantic_annotations
+        - file: examples/world_state_manipulation
         - file: examples/regions
-        - file: examples/factories
+        - file: examples/semantic_annotation_factories
         - file: examples/persistence_of_annotated_worlds
+        - file: examples/graph_of_convex_sets
+        - file: examples/multiverse
 - caption: Developer Guide
   chapters:
     - file: developer_guide
 - caption: Concepts
   chapters:
     - file: kinematic_world
-    - file: views
+    - file: semantic_annotations
     - file: world_reasoner
     - file: world_synchronization
     - file: style_guide
-- caption: Examples
+- caption: Self-Assessment
   chapters:
-    - file: examples/graph_of_convex_sets
+    - file: self_assessment/quizzes_intro
+      sections:
+        - file: self_assessment/quizzes/using_transformations_quiz
+        - file: self_assessment/quizzes/creating_custom_bodies_quiz
+        - file: self_assessment/quizzes/loading_worlds_quiz
+        - file: self_assessment/quizzes/visualizing_worlds_quiz
+        - file: self_assessment/quizzes/world_structure_manipulation_quiz
+        - file: self_assessment/quizzes/semantic_annotations_quiz
+        - file: self_assessment/quizzes/world_state_manipulation_quiz
+        - file: self_assessment/quizzes/regions_quiz
+        - file: self_assessment/quizzes/semantic_annotation_factories_quiz
+        - file: self_assessment/quizzes/persistence_of_annotated_worlds_quiz
+        - file: self_assessment/quizzes/graph_of_convex_sets_quiz
+    - file: self_assessment/exercises_intro
 - caption: References
   chapters:
     - file: autoapi/index

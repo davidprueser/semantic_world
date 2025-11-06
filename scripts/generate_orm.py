@@ -1,80 +1,131 @@
-import builtins
-import os
-from enum import Enum
-
-from ormatic.ormatic import ORMatic
-from ormatic.utils import classes_of_module, recursive_subclasses
-
-import semantic_world.world_description.degree_of_freedom
-import semantic_world.robots.abstract_robot
-import semantic_world.views.views
-import semantic_world.reasoning.predicates
-import semantic_world.world_description.world_entity
-from semantic_world.adapters.procthor.procthor_views import HouseholdObject
-from semantic_world.world import (
-    ResetStateContextManager,
-    WorldModelUpdateContextManager,
-)
-from semantic_world.spatial_computations.forward_kinematics import (
-    ForwardKinematicsVisitor,
-)
-from semantic_world.world_description.connections import (
-    FixedConnection,
-    HasUpdateState,
-)
-from semantic_world.orm.model import *
-from semantic_world.datastructures.prefixed_name import PrefixedName
-
 # ----------------------------------------------------------------------------------------------------------------------
-# This script generates the ORM classes for the semantic_world package.
+# This script generates the ORM classes for the semantic_digital_twin package.
 # Dataclasses can be mapped automatically to the ORM model
 # using the ORMatic library, they just have to be registered in the classes list.
 # Classes that are self_mapped and explicitly_mapped are already mapped in the model.py file. Look there for more
 # information on how to map them.
 # ----------------------------------------------------------------------------------------------------------------------
+from __future__ import annotations
+import os
+from dataclasses import is_dataclass
 
-# create of classes that should be mapped
-classes = set(recursive_subclasses(AlternativeMapping))
-classes |= set(classes_of_module(semantic_world.world_description.geometry))
-classes |= set(classes_of_module(semantic_world.world_description.shape_collection))
-classes |= set(classes_of_module(semantic_world.world))
-classes |= set(classes_of_module(semantic_world.datastructures.prefixed_name))
-classes |= set(classes_of_module(semantic_world.world_description.world_entity))
-classes |= set(classes_of_module(semantic_world.world_description.connections))
-classes |= set(classes_of_module(semantic_world.views.views))
-classes |= set(classes_of_module(semantic_world.world_description.degree_of_freedom))
-classes |= set(classes_of_module(semantic_world.robots.abstract_robot))
-classes |= set([HouseholdObject] + recursive_subclasses(HouseholdObject))
-classes |= set(classes_of_module(semantic_world.reasoning.predicates))
+import krrood.entity_query_language.orm.model
+import trimesh
+from krrood.class_diagrams import ClassDiagram
+from krrood.entity_query_language.predicate import HasTypes, HasType, Symbol
+from krrood.entity_query_language.symbol_graph import SymbolGraph
+from krrood.ormatic.dao import AlternativeMapping
+from krrood.ormatic.ormatic import ORMatic
+from krrood.ormatic.utils import classes_of_module
+from krrood.utils import recursive_subclasses
+
+import semantic_digital_twin.orm.model
+import semantic_digital_twin.robots.abstract_robot
+import semantic_digital_twin.semantic_annotations.semantic_annotations
+import semantic_digital_twin.world  # ensure the module attribute exists on the package
+import semantic_digital_twin.world_description.degree_of_freedom
+import semantic_digital_twin.world_description.geometry
+import semantic_digital_twin.world_description.shape_collection
+import semantic_digital_twin.world_description.world_entity
+import semantic_digital_twin.reasoning.predicates
+from semantic_digital_twin.world import WorldModelManager
+from semantic_digital_twin.adapters.procthor.procthor_semantic_annotations import HouseholdObject
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.spatial_computations.forward_kinematics import (
+    ForwardKinematicsManager,
+)
+from semantic_digital_twin.world import (
+    ResetStateContextManager,
+    WorldModelUpdateContextManager,
+)
+from semantic_digital_twin.world_description.connections import (
+    FixedConnection,
+    HasUpdateState,
+)
+
+
+# collect all semantic digital twin classes that should be mapped
+all_classes = set(classes_of_module(semantic_digital_twin.orm.model))
+all_classes |= set(
+    classes_of_module(semantic_digital_twin.world_description.world_entity)
+)
+all_classes |= set(classes_of_module(semantic_digital_twin.world_description.geometry))
+all_classes |= set(
+    classes_of_module(semantic_digital_twin.world_description.shape_collection)
+)
+all_classes |= set(classes_of_module(semantic_digital_twin.world))
+all_classes |= set(
+    classes_of_module(semantic_digital_twin.datastructures.prefixed_name)
+)
+
+all_classes |= set(
+    classes_of_module(semantic_digital_twin.world_description.connections)
+)
+all_classes |= set(
+    classes_of_module(semantic_digital_twin.semantic_annotations.semantic_annotations)
+)
+all_classes |= set(
+    classes_of_module(semantic_digital_twin.world_description.degree_of_freedom)
+)
+all_classes |= set(classes_of_module(semantic_digital_twin.robots.abstract_robot))
+# classes |= set(recursive_subclasses(ViewFactory))
+all_classes |= set([HouseholdObject] + recursive_subclasses(HouseholdObject))
+all_classes |= set(classes_of_module(semantic_digital_twin.reasoning.predicates))
+
 
 # remove classes that should not be mapped
-classes -= {
+all_classes -= {
     ResetStateContextManager,
     WorldModelUpdateContextManager,
     HasUpdateState,
-    World,
-    ForwardKinematicsVisitor,
-    DegreeOfFreedom,
+    ForwardKinematicsManager,
+    WorldModelManager
 }
-classes -= set(recursive_subclasses(Enum))
-classes -= set(recursive_subclasses(Exception))
+
+# build the symbol graph
+symbol_graph = SymbolGraph()
+
+# collect all KRROOD classes
+all_classes |= {c.clazz for c in symbol_graph.class_diagram.wrapped_classes}
+all_classes |= {am.original_class() for am in recursive_subclasses(AlternativeMapping)}
+all_classes |= set(classes_of_module(krrood.entity_query_language.symbol_graph))
+all_classes |= {Symbol}
+
+# remove classes that don't need persistence
+all_classes -= {HasType, HasTypes}
+
+
+# keep only dataclasses that are NOT AlternativeMapping subclasses
+all_classes = {
+    c for c in all_classes if is_dataclass(c) and not issubclass(c, AlternativeMapping)
+}
+
+# ensure we have the original classes of the mappings (ORMatic uses these)
+all_classes |= {am.original_class() for am in recursive_subclasses(AlternativeMapping)}
 
 
 def generate_orm():
     """
     Generate the ORM classes for the pycram package.
     """
-    # Create an ORMatic object with the classes to be mapped
-    ormatic = ORMatic(list(classes), type_mappings={trimesh.Trimesh: TrimeshType})
-
-    # Generate the ORM classes
-    ormatic.make_all_tables()
-
-    path = os.path.abspath(
-        os.path.join(os.getcwd(), "..", "src", "semantic_world", "orm")
+    class_diagram = ClassDiagram(
+        list(sorted(all_classes, key=lambda c: c.__name__, reverse=True))
     )
-    with builtins.open(os.path.join(path, "ormatic_interface.py"), "w") as f:
-        ormatic.to_sqlalchemy_file(f)
+
+    instance = ORMatic(
+        class_dependency_graph=class_diagram,
+        type_mappings={trimesh.Trimesh: semantic_digital_twin.orm.model.TrimeshType},
+        alternative_mappings=recursive_subclasses(AlternativeMapping),
+    )
+
+    instance.make_all_tables()
+
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    path = os.path.abspath(
+        os.path.join(script_dir, "..", "src", "semantic_digital_twin", "orm")
+    )
+    with open(os.path.join(path, "ormatic_interface.py"), "w") as f:
+        instance.to_sqlalchemy_file(f)
 
 
 if __name__ == "__main__":

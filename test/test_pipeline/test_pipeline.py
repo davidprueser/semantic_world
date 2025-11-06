@@ -5,25 +5,26 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from semantic_world.adapters.fbx import FBXParser
-from semantic_world.adapters.procthor.procthor_pipelines import (
+from semantic_digital_twin.adapters.fbx import FBXParser
+from semantic_digital_twin.adapters.procthor.procthor_pipelines import (
     dresser_factory_from_body,
     drawer_factory_from_body,
     door_factory_from_body,
 )
-from semantic_world.datastructures.prefixed_name import PrefixedName
-from semantic_world.pipeline.pipeline import (
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.exceptions import WorldEntityNotFoundError
+from semantic_digital_twin.pipeline.pipeline import (
     Step,
     Pipeline,
     BodyFilter,
     CenterLocalGeometryAndPreserveWorldPose,
     BodyFactoryReplace,
 )
-from semantic_world.spatial_types.spatial_types import TransformationMatrix
-from semantic_world.utils import get_semantic_world_directory_root
-from semantic_world.world import World
-from semantic_world.world_description.connections import FixedConnection
-from semantic_world.world_description.world_entity import Body
+from semantic_digital_twin.spatial_types.spatial_types import TransformationMatrix
+from semantic_digital_twin.utils import get_semantic_digital_twin_directory_root
+from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.connections import FixedConnection
+from semantic_digital_twin.world_description.world_entity import Body
 
 
 class PipelineTestCase(unittest.TestCase):
@@ -41,7 +42,7 @@ class PipelineTestCase(unittest.TestCase):
             cls.dummy_world.add_connection(c1)
 
         cls.fbx_path = os.path.join(
-            get_semantic_world_directory_root(os.getcwd()),
+            get_semantic_digital_twin_directory_root(os.getcwd()),
             "resources",
             "fbx",
             "test_dressers.fbx",
@@ -119,7 +120,7 @@ class PipelineTestCase(unittest.TestCase):
 
         self.assertIsNotNone(world.get_body_by_name("dresser_205"))
         self.assertIsNotNone(world.get_body_by_name("dresser_217"))
-        self.assertFalse(world.views)
+        self.assertFalse(world.semantic_annotations)
 
         procthor_factory_replace_pipeline = Pipeline(
             [
@@ -137,11 +138,15 @@ class PipelineTestCase(unittest.TestCase):
 
         replaced_world = procthor_factory_replace_pipeline.apply(world)
 
-        self.assertRaises(KeyError, replaced_world.get_body_by_name, "dresser_205")
-        self.assertRaises(KeyError, replaced_world.get_body_by_name, "dresser_217")
-        self.assertTrue(replaced_world.views)
-        self.assertIsNotNone(replaced_world.get_view_by_name("dresser_205"))
-        self.assertIsNotNone(replaced_world.get_view_by_name("dresser_217"))
+        self.assertRaises(WorldEntityNotFoundError, replaced_world.get_body_by_name, "dresser_205")
+        self.assertRaises(WorldEntityNotFoundError, replaced_world.get_body_by_name, "dresser_217")
+        self.assertTrue(replaced_world.semantic_annotations)
+        self.assertIsNotNone(
+            replaced_world.get_semantic_annotation_by_name("dresser_205")
+        )
+        self.assertIsNotNone(
+            replaced_world.get_semantic_annotation_by_name("dresser_217")
+        )
 
     def test_dresser_factory_from_body(self):
         world = FBXParser(self.fbx_path).parse()

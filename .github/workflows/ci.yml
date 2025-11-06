@@ -20,26 +20,40 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with:
-        path: "ros/src/semantic_world"
+        path: "ros/src/semantic_digital_twin"
         repository: ${{ github.repository }}
         ref: ${{ github.ref }}
         submodules: 'false'
-    - name: Update semantic_world source files
+    - name: Update semantic_digital_twin source files
       run: |
-        rm -rf /opt/ros/semantic_world/* 
-        cd /opt/ros//semantic_world
+        rm -rf /opt/ros/semantic_digital_twin/* 
+        cd /opt/ros//semantic_digital_twin
         rm -rf .git .github .gitignore .gitmodules .readthedocs.yaml
-        cp -r /__w/${{ github.event.repository.name }}/${{ github.event.repository.name }}/ros/src/semantic_world /opt/ros/
+        cp -r /__w/${{ github.event.repository.name }}/${{ github.event.repository.name }}/ros/src/semantic_digital_twin /opt/ros/
 
     - name: Install dependencies
       run: |
         sudo apt-get update
-        cd /opt/ros/semantic_world
-        source /opt/ros/semantic_world-venv/bin/activate
+        cd /opt/ros/semantic_digital_twin
+        source /opt/ros/semantic_digital_twin-venv/bin/activate
         git submodule init
         git submodule update
         pip install -U pip && pip install -r requirements.txt && pip install -e . && pip install pytest
         pip install -e ./src/ripple_down_rules_meta
+        if [[ $(python3 --version) == "Python 3.10"* ]]; then
+          PACKAGE_URL="https://nc.uni-bremen.de/public.php/dav/files/fxWQigKXPBtnXsy/?accept=zip"
+          PACKAGE_HASH="5249b21f6a6dbbb86eee9e64659cf19b9b09585ffbc888d13af9bd9c2bcce99c"
+        elif [[ $(python3 --version) == "Python 3.12"* ]]; then
+          PACKAGE_URL="https://nc.uni-bremen.de/public.php/dav/files/nxxi4QSBcYmmxba/?accept=zip"
+          PACKAGE_HASH="a111ac524d6eb9161ed90972cd60670de887066b553a91a397da985f3a60f9aa"
+        fi
+        if [[ -n "$PACKAGE_URL" ]]; then
+          TMP_PKG="/tmp/multiverse_parser-0.0.3.tar.gz"
+          curl -fsSL "$PACKAGE_URL" -o "$TMP_PKG"
+          echo "$PACKAGE_HASH  $TMP_PKG" | sha256sum -c -
+          pip install "$TMP_PKG"
+          rm -f "$TMP_PKG"
+        fi
 #        echo "PATH=/opt/ros/overlay_ws/src/Multiverse-Parser/ext/blender:/opt/ros/overlay_ws/src/Multiverse-Parser/USD/linux/lib/python:/opt/ros/overlay_ws/src/Multiverse-Parser/USD/linux/plugin/usd:$PATH" >> $GITHUB_ENV
 #        echo "PYTHONPATH=/opt/ros/overlay_ws/src/Multiverse-Parser/USD/linux/lib/python:/opt/ros/overlay_ws/src/src" >> $GITHUB_ENV
 
@@ -47,6 +61,6 @@ jobs:
     - name: Run tests
       run: |
         source /opt/ros/overlay_ws/install/setup.bash
-        source /opt/ros/semantic_world-venv/bin/activate
-        cd /opt/ros/semantic_world
+        source /opt/ros/semantic_digital_twin-venv/bin/activate
+        cd /opt/ros/semantic_digital_twin
         python -m pytest -v test/

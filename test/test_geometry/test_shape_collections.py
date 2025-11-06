@@ -1,10 +1,10 @@
-from semantic_world.datastructures.prefixed_name import PrefixedName
-from semantic_world.spatial_types.spatial_types import TransformationMatrix
-from semantic_world.world import World
-from semantic_world.world_description.connections import FixedConnection
-from semantic_world.world_description.geometry import Sphere
-from semantic_world.world_description.shape_collection import ShapeCollection
-from semantic_world.world_description.world_entity import Body
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.spatial_types.spatial_types import TransformationMatrix
+from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.connections import FixedConnection
+from semantic_digital_twin.world_description.geometry import Sphere
+from semantic_digital_twin.world_description.shape_collection import ShapeCollection
+from semantic_digital_twin.world_description.world_entity import Body
 
 
 def test_post_init_transformation():
@@ -17,7 +17,6 @@ def test_post_init_transformation():
             FixedConnection(
                 parent=root,
                 child=b1,
-                _world=w,
                 parent_T_connection_expression=TransformationMatrix.from_xyz_rpy(
                     x=1, reference_frame=root
                 ),

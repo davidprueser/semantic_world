@@ -1,9 +1,8 @@
 # Book settings
 # Learn more at https://jupyterbook.org/customize/config.html
 
-title: Semantic World
+title: Semantic Digital Twin
 author: AICOR Institute for Artificial Intelligence
-logo: "images/semantic_world_logo.png"
 
 # Force re-execution of notebooks on each build.
 # See https://jupyterbook.org/content/execute.html
@@ -47,7 +46,7 @@ sphinx:
 
 # Information about where the book exists on the web
 repository:
-  url: https://github.com/cram2/semantic_world  # Online location of your book
+  url: https://github.com/cram2/semantic_digital_twin  # Online location of your book
   path_to_book: doc  # Optional path to your book, relative to the repository root
   branch: main  # Which branch of the repository should be used when creating links (optional)
 

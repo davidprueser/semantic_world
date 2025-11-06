@@ -2,8 +2,8 @@ from typing_extensions import Tuple, Union, List
 
 import numpy as np
 
-from semantic_world.datastructures.types import AnyMatrix4x4, NpMatrix4x4
-from semantic_world.spatial_types.derivatives import Derivatives
+from semantic_digital_twin.datastructures.types import AnyMatrix4x4, NpMatrix4x4
+from semantic_digital_twin.spatial_types.derivatives import Derivatives
 
 
 def quaternion_multiply(quaternion1: np.ndarray, quaternion0: np.ndarray) -> np.ndarray:
