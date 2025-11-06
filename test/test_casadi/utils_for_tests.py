@@ -7,7 +7,7 @@ from hypothesis import assume
 from hypothesis.strategies import composite
 from numpy import pi
 
-import semantic_world.spatial_types.spatial_types as cas
+import semantic_digital_twin.spatial_types.spatial_types as cas
 from .reference_implementations import shortest_angular_distance
 
 BIG_NUMBER = 1e100

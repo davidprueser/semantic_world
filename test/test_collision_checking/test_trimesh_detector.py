@@ -2,12 +2,12 @@ import itertools
 
 import pytest
 
-from semantic_world.collision_checking.collision_detector import CollisionCheck
-from semantic_world.collision_checking.trimesh_collision_detector import (
+from semantic_digital_twin.collision_checking.collision_detector import CollisionCheck
+from semantic_digital_twin.collision_checking.trimesh_collision_detector import (
     TrimeshCollisionDetector,
 )
-from semantic_world.spatial_types import TransformationMatrix
-from semantic_world.testing import world_setup_simple
+from semantic_digital_twin.spatial_types import TransformationMatrix
+from semantic_digital_twin.testing import world_setup_simple
 
 
 def test_simple_collision(world_setup_simple):

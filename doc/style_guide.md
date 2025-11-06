@@ -92,7 +92,7 @@ a_T_c = a_T_b @ b_T_c
 
 ### Invert transformations
 ```python
-from semantic_world.spatial_types.math import inverse_frame
+from semantic_digital_twin.spatial_types.math import inverse_frame
 c_T_a = inverse_frame(a_T_c)
 ```
 Remember that:
@@ -108,7 +108,7 @@ a_R_r = a_R_b @ b_R_r  #rotation matrices don't care about translation, so these
 
 ### Invert rotation matrices
 ```python
-from semantic_world.spatial_types.math import inverse_frame
+from semantic_digital_twin.spatial_types.math import inverse_frame
 b_R_a = inverse_frame(a_R_b)
 b_R_a = a_R_b.T  # for rotation matrices only, the transpose is equal to its inverse.
 ```

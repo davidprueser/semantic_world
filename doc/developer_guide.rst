@@ -3,9 +3,9 @@
 Developer Guide
 ===============
 
-This guide explains how to effectively contribute to the semantic world.
+This guide explains how to effectively contribute to the semantic digital twin.
 General code style related guidelines that can also be used for your AI assistant are found in the
-`junie guidelines <https://github.com/cram2/semantic_world/tree/main/.junie/guidelines.md>`_.
+`junie guidelines <https://github.com/cram2/semantic_digital_twin/tree/main/.junie/guidelines.md>`_.
 
 Environment Setup
 -----------------
@@ -23,30 +23,29 @@ You can locally install the package with
 
 .. code-block:: bash
 
-   mkvirtualenv semantic_world --system-site-packages
-   cd /path/to/semantic_world
+   mkvirtualenv semantic_digital_twin --system-site-packages
+   cd /path/to/semantic_digital_twin
    pip install -e .
 
 Core Parts
 ----------
 
-- :py:mod:`semantic_world.adapters`: Bridges between the World and external ecosystems and file formats. They import/export world data and keep it in sync with tools like ROS2, simulators, and mesh/robot formats.
+- :py:mod:`semantic_digital_twin.adapters`: Bridges between the World and external ecosystems and file formats. They import/export world data and keep it in sync with tools like ROS2, simulators, and mesh/robot formats.
 
-- :py:mod:`semantic_world.world`: The central scene-graph/kinematic container you interact with. It owns bodies, connections, and degrees of freedom; validates and updates the kinematic structure; provides forward/inverse kinematics, collision-related utilities, callbacks for state/model changes, and orchestration of higher-level semantics like views.
+- :py:mod:`semantic_digital_twin.world`: The central scene-graph/kinematic container you interact with. It owns bodies, connections, and degrees of freedom; validates and updates the kinematic structure; provides forward/inverse kinematics, collision-related utilities, callbacks for state/model changes, and orchestration of higher-level semantics like semantic annotations.
 
-- :py:mod:`semantic_world.orm`: The database layer. It maps world entities and relationships to SQL databases via SQLAlchemy (auto-generated with `ormatic`), enabling serialization, persistence, and retrieval of complete worlds. It defines the SQL types and a thin interface to store/load worlds reproducibly. If you are unhappy with the storage and retrieval of data from databases you most likely have to change something here
+- :py:mod:`semantic_digital_twin.orm`: The database layer. It maps world entities and relationships to SQL databases via SQLAlchemy (auto-generated with `ormatic`), enabling serialization, persistence, and retrieval of complete worlds. It defines the SQL types and a thin interface to store/load worlds reproducibly. If you are unhappy with the storage and retrieval of data from databases you most likely have to change something here
 
-- :py:mod:`semantic_world.spatial_types`: Numeric/symbolic geometric primitives and transformations used across the package (e.g., `TransformationMatrix`, points, vectors, expressions, derivatives). They support composing poses, doing kinematics, and differentiating expressions for solvers.
+- :py:mod:`semantic_digital_twin.spatial_types`: Numeric/symbolic geometric primitives and transformations used across the package (e.g., `TransformationMatrix`, points, vectors, expressions, derivatives). They support composing poses, doing kinematics, and differentiating expressions for solvers.
 
-- :py:mod:`semantic_world.views`: Semantic abstractions built on top of raw bodies and connections. A `View` represents a higher-level concept (e.g., a drawer composed of a handle and a prismatic container) and can be inferred by rules. Views provide task-relevant groupings and behaviors without changing the underlying kinematic graph.
-
-- :py:mod:`semantic_world.world_description`: The domain model for kinematic structure and geometry: `Body`, `Region`, `Connection` (fixed, passive/active joints, 6-DoF), `DegreeOfFreedom`, geometry/mesh types, state and modification objects. These classes define the structure and editable state that the `World` manages and reasoners and adapters consume.
+- :py:mod:`semantic_digital_twin.semantic_annotations`: Semantic abstractions built on top of raw bodies and connections. A `SemanticAnnotation` represents a higher-level concept (e.g., a drawer composed of a handle and a prismatic container) and can be inferred by rules. semantic annotations provide task-relevant groupings and behaviors without changing the underlying kinematic graph.
+- :py:mod:`semantic_digital_twin.world_description`: The domain model for kinematic structure and geometry: `Body`, `Region`, `Connection` (fixed, passive/active joints, 6-DoF), `DegreeOfFreedom`, geometry/mesh types, state and modification objects. These classes define the structure and editable state that the `World` manages and reasoners and adapters consume.
 
 Testing
 -------
 
 The tests are all contained in the test folder and further grouped by topics and written with `pytest <https://docs.pytest.org/en/7.1.x/index.html>`_.
-The semantic world contains a module :py:mod:`semantic_world.testing` for useful fixtures that shorten your boilerplate code.
+The semantic digital twin contains a module :py:mod:`semantic_digital_twin.testing` for useful fixtures that shorten your boilerplate code.
 We aim for a test coverage > 95% and generally test everything we write. 
 Naturally, there are some exceptions, mainly including printing and visualization functionality.
 
@@ -55,7 +54,7 @@ You can execute them with
 
 .. code-block:: bash
 
-   cd /path/to/semantic_world
+   cd /path/to/semantic_digital_twin
    pytest test
 
 Documentation
@@ -66,7 +65,7 @@ You can build it locally using
 
 .. code-block:: bash
 
-   cd /path/to/semantic_world/doc
+   cd /path/to/semantic_digital_twin/doc
    jb build .
 
 
@@ -85,7 +84,7 @@ You can test the entirety of notebooks using treon with
 
 .. code-block:: bash
 
-   cd /path/to/semantic_world/scripts
+   cd /path/to/semantic_digital_twin/scripts
    bash test_notebooks.sh
 
 Contribution Guidelines
@@ -108,7 +107,7 @@ If you are a fellow pycharm enjoyer, there are a couple of hints I want to hand 
 
 Help, people are unhappy with my PR
 -----------------------------------
-We only accept clean code that does something useful and feels like it belongs inside the semantic world.
+We only accept clean code that does something useful and feels like it belongs inside the semantic digital twin.
 If the reviews address the quality/cleanness of your code, here are resources to improve your python object-oriented programming skills:
 
 - `SOLID Principles <https://realpython.com/solid-principles-python/>`_

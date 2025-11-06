@@ -7,7 +7,7 @@ project-includes = ["**/*"]
 project-excludes = ["**/*venv/**/*"]
 
 [project]
-name = "semantic_world"
+name = "semantic_digital_twin"
 authors = [
     { name="Tom Schierenbeck", email="tom_sch@uni-bremen.de" },
 
@@ -25,15 +25,15 @@ dynamic = ["version", "dependencies"]
 license = { text = "LGPL-3.0-only" }
 
 [project.urls]
-"Source" = 'https://github.com/cram2/semantic_world'
-"Bug Tracker" = 'https://github.com/cram2/semantic_world/issues'
+"Source" = 'https://github.com/cram2/semantic_digital_twin'
+"Bug Tracker" = 'https://github.com/cram2/semantic_digital_twin/issues'
 
 [tool.setuptools.packages.find]
 where = ["src"]  # list of folders that contain the packages (["."] by default)
-include = ["semantic_world*"]
+include = ["semantic_digital_twin*"]
 
 [tool.setuptools.dynamic]
-version = {attr = "semantic_world.__version__"}
+version = {attr = "semantic_digital_twin.__version__"}
 dependencies = {file = "requirements.txt"}
 
 [project.optional-dependencies]

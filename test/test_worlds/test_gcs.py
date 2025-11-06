@@ -5,21 +5,21 @@ import plotly.graph_objects as go
 from random_events.interval import SimpleInterval
 from random_events.product_algebra import SimpleEvent
 
-from semantic_world.adapters.urdf import URDFParser
-from semantic_world.world_description.geometry import BoundingBox
-from semantic_world.world_description.shape_collection import (
+from semantic_digital_twin.adapters.urdf import URDFParser
+from semantic_digital_twin.world_description.geometry import BoundingBox
+from semantic_digital_twin.world_description.shape_collection import (
     BoundingBoxCollection,
     ShapeCollection,
 )
-from semantic_world.world_description.graph_of_convex_sets import (
+from semantic_digital_twin.world_description.graph_of_convex_sets import (
     GraphOfConvexSets,
     PoseOccupiedError,
 )
-from semantic_world.spatial_types import Point3
-from semantic_world.spatial_types.spatial_types import TransformationMatrix
-from semantic_world.datastructures.variables import SpatialVariables
-from semantic_world.world import World
-from semantic_world.world_description.world_entity import Body
+from semantic_digital_twin.spatial_types import Point3
+from semantic_digital_twin.spatial_types.spatial_types import TransformationMatrix
+from semantic_digital_twin.datastructures.variables import SpatialVariables
+from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.world_entity import Body
 
 
 class GCSTestCase(unittest.TestCase):

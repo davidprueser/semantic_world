@@ -1,28 +1,25 @@
 import unittest
 
-from semantic_world.datastructures.prefixed_name import PrefixedName
-from semantic_world.spatial_types.spatial_types import Vector3
-from semantic_world.views.views import Handle, Door
-from semantic_world.world import World
-from semantic_world.world_description.connection_factories import (
-    ConnectionFactory,
-    FixedConnectionFactory,
-    RevoluteConnectionFactory,
-)
-from semantic_world.world_description.connections import (
+from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
+
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.spatial_types.spatial_types import Vector3
+from semantic_digital_twin.semantic_annotations.semantic_annotations import Handle, Door
+from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.connections import (
     FixedConnection,
     Connection6DoF,
     PrismaticConnection,
     RevoluteConnection,
 )
-from semantic_world.world_description.world_entity import Body
-from semantic_world.world_description.world_modification import (
+from semantic_digital_twin.world_description.world_entity import Body
+from semantic_digital_twin.world_description.world_modification import (
     WorldModelModificationBlock,
     AddKinematicStructureEntityModification,
     AddConnectionModification,
     AddDegreeOfFreedomModification,
-    AddViewModification,
-    RemoveViewModification,
+    AddSemanticAnnotationModification,
+    RemoveSemanticAnnotationModification,
 )
 
 
@@ -37,12 +34,8 @@ class ConnectionModificationTestCase(unittest.TestCase):
             w.add_kinematic_structure_entity(b1)
             w.add_kinematic_structure_entity(b2)
 
-            connection = FixedConnection(b1, b2, _world=w)
+            connection = FixedConnection(b1, b2)
             w.add_connection(connection)
-
-        connection = w.connections[0]
-        factory = ConnectionFactory.from_connection(connection)
-        assert isinstance(factory, FixedConnectionFactory)
 
     def test_ChangeDofHasHardwareInterface(self):
         w = World()
@@ -53,8 +46,10 @@ class ConnectionModificationTestCase(unittest.TestCase):
             w.add_kinematic_structure_entity(b1)
             w.add_kinematic_structure_entity(b2)
 
+            dof = DegreeOfFreedom(name=PrefixedName("dofyboi"))
+            w.add_degree_of_freedom(dof)
             connection = RevoluteConnection(
-                b1, b2, _world=w, axis=Vector3.from_iterable([0, 0, 1])
+                b1, b2, axis=Vector3.from_iterable([0, 0, 1]), dof_name=dof.name
             )
             w.add_connection(connection)
         assert connection.dof.has_hardware_interface is False
@@ -62,10 +57,6 @@ class ConnectionModificationTestCase(unittest.TestCase):
         with w.modify_world():
             w.set_dofs_has_hardware_interface(connection.dofs, True)
         assert connection.dof.has_hardware_interface is True
-
-        connection = w.connections[0]
-        factory = ConnectionFactory.from_connection(connection)
-        assert isinstance(factory, RevoluteConnectionFactory)
 
     def test_many_modifications(self):
         w = World()
@@ -77,14 +68,21 @@ class ConnectionModificationTestCase(unittest.TestCase):
             w.add_kinematic_structure_entity(b1)
             w.add_kinematic_structure_entity(b2)
             w.add_kinematic_structure_entity(b3)
-            w.add_connection(Connection6DoF(b1, b2, _world=w))
+            w.add_connection(
+                Connection6DoF.create_with_dofs(parent=b1, child=b2, world=w)
+            )
+            dof = DegreeOfFreedom(name=PrefixedName("dofyboi"))
+            w.add_degree_of_freedom(dof)
             w.add_connection(
                 PrismaticConnection(
-                    parent=b2, child=b3, _world=w, axis=Vector3.from_iterable([0, 0, 1])
+                    parent=b2,
+                    child=b3,
+                    axis=Vector3.from_iterable([0, 0, 1]),
+                    dof_name=dof.name,
                 )
             )
 
-        modifications = w._model_modification_blocks[-1]
+        modifications = w.get_world_model_manager().model_modification_blocks[-1]
         self.assertEqual(len(modifications.modifications), 13)
 
         add_body_modifications = [
@@ -125,7 +123,7 @@ class ConnectionModificationTestCase(unittest.TestCase):
                 w.get_kinematic_structure_entity_by_name("b3")
             )
 
-        modifications = w._model_modification_blocks[-1]
+        modifications = w.get_world_model_manager().model_modification_blocks[-1]
         self.assertEqual(len(modifications.modifications), 3)
 
         modifications_copy = WorldModelModificationBlock.from_json(
@@ -135,33 +133,33 @@ class ConnectionModificationTestCase(unittest.TestCase):
         self.assertEqual(len(w2.bodies), 2)
         self.assertEqual(len(w2.connections), 1)
 
-    def test_view_modifications(self):
+    def test_semantic_annotation_modifications(self):
         w = World()
         b1 = Body(name=PrefixedName("b1"))
         v1 = Handle(body=b1)
         v2 = Door(body=b1, handle=v1)
 
-        add_v1 = AddViewModification(v1)
-        add_v2 = AddViewModification(v2)
+        add_v1 = AddSemanticAnnotationModification(v1)
+        add_v2 = AddSemanticAnnotationModification(v2)
 
-        self.assertNotIn(v1, w.views)
-        self.assertNotIn(v2, w.views)
+        self.assertNotIn(v1, w.semantic_annotations)
+        self.assertNotIn(v2, w.semantic_annotations)
 
         with w.modify_world():
             add_v1.apply(w)
             add_v2.apply(w)
 
-        self.assertIn(v1, w.views)
-        self.assertIn(v2, w.views)
+        self.assertIn(v1, w.semantic_annotations)
+        self.assertIn(v2, w.semantic_annotations)
 
-        rm_v1 = RemoveViewModification(v1)
-        rm_v2 = RemoveViewModification(v2)
+        rm_v1 = RemoveSemanticAnnotationModification(v1)
+        rm_v2 = RemoveSemanticAnnotationModification(v2)
         with w.modify_world():
             rm_v1.apply(w)
             rm_v2.apply(w)
 
-        self.assertNotIn(v1, w.views)
-        self.assertNotIn(v2, w.views)
+        self.assertNotIn(v1, w.semantic_annotations)
+        self.assertNotIn(v2, w.semantic_annotations)
 
 
 if __name__ == "__main__":

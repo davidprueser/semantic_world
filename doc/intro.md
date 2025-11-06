@@ -1,16 +1,16 @@
-# Semantic World
+# Semantic Digital Twin
 
-Introducing Semantic World: A unified interface for scene data and asserted meaning.
+Introducing Semantic Digital Twin: A unified interface for scene data and asserted meaning.
 
-The Semantic World Python package streamlines the integration and management of scene graphs with explicit semantic assertions.
+The Semantic Digital Twin Python package streamlines the integration and management of scene graphs with explicit semantic assertions.
 Agents and autonomous systems require more than just coordinates, they need contextual understanding. 
-Semantic World bridges geometry, kinematics, and meaning, allowing systems for planning, 
+Semantic Digital Twin bridges geometry, kinematics, and meaning, allowing systems for planning, 
 learning, and reasoning to process the environment through actionable, high-level concepts.
 
 This enables the construction of environments that can be readily understood,
 queried, transformed, and shared across projects.
 Whether for research prototypes or robust data pipelines,
-Semantic World translates raw environment data into structured knowledge.
+Semantic Digital Twin translates raw environment data into structured knowledge.
 
 ## Assimilated Technologies
 
@@ -22,7 +22,7 @@ Semantic World translates raw environment data into structured knowledge.
   </div>
   <div style="flex: 2; display: flex; flex-direction: column; gap: 1em;">
     <p>🌍 <b>Model full kinematic worlds, not just meshes</b>. Define bodies, regions, connections, and degrees of freedom as primary, first-class entities within a clean, composable Python API.</p>
-    <p>🤔 <b>Enhance meaning with Views.</b> Transform raw geometry into actionable concepts like drawers, handles, containers, and task-relevant regions. Express relationships and intent beyond simple shapes.</p>
+    <p>🤔 <b>Enhance meaning with semantic annotations.</b> Transform raw geometry into actionable concepts like drawers, handles, containers, and task-relevant regions. Express relationships and intent beyond simple shapes.</p>
     <p>💡 <b>Intelligent Querying.</b> Use a high-level entity query language to precisely locate relevant elements—e.g., "the handle attached to the drawer that is currently accessible"—to enable targeted interaction.</p>
   </div>
 </div>

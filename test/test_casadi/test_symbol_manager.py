@@ -4,9 +4,12 @@ from unittest.mock import Mock
 import numpy as np
 import pytest
 
-import semantic_world.spatial_types.spatial_types as cas
-from semantic_world.exceptions import SymbolResolutionError
-from semantic_world.spatial_types.symbol_manager import SymbolManager, symbol_manager
+import semantic_digital_twin.spatial_types.spatial_types as cas
+from semantic_digital_twin.exceptions import SymbolResolutionError
+from semantic_digital_twin.spatial_types.symbol_manager import (
+    SymbolManager,
+    symbol_manager,
+)
 
 
 class TestSymbolManager:

@@ -4,8 +4,8 @@ import pytest
 import scipy
 from hypothesis import given, assume
 
-import semantic_world.spatial_types.spatial_types as cas
-from semantic_world.exceptions import (
+import semantic_digital_twin.spatial_types.spatial_types as cas
+from semantic_digital_twin.exceptions import (
     HasFreeSymbolsError,
     WrongDimensionsError,
     SpatialTypesError,

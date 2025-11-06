@@ -20,23 +20,23 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with:
-        path: "ros/src/semantic_world"
+        path: "ros/src/semantic_digital_twin"
         repository: ${{ github.repository }}
         ref: ${{ github.ref }}
         submodules: 'false'
-    - name: Update semantic_world source files
+    - name: Update semantic_digital_twin source files
       run: |
-        rm -rf /opt/ros/semantic_world/* 
-        cd /opt/ros//semantic_world
+        rm -rf /opt/ros/semantic_digital_twin/* 
+        cd /opt/ros//semantic_digital_twin
         rm -rf .git .github .gitignore .gitmodules .readthedocs.yaml
-        cp -r /__w/${{ github.event.repository.name }}/${{ github.event.repository.name }}/ros/src/semantic_world /opt/ros/
+        cp -r /__w/${{ github.event.repository.name }}/${{ github.event.repository.name }}/ros/src/semantic_digital_twin /opt/ros/
 
     - name: Install dependencies
       run: |
         sudo apt-get update
         sudo apt install python3-cffi -y
-        cd /opt/ros/semantic_world
-        source /opt/ros/semantic_world-venv/bin/activate
+        cd /opt/ros/semantic_digital_twin
+        source /opt/ros/semantic_digital_twin-venv/bin/activate
         git submodule init
         git submodule update
         pip install -U pip && pip install -U -r requirements.txt && pip install -e . && pip install pytest
@@ -49,6 +49,6 @@ jobs:
     - name: Run tests
       run: |
         source /opt/ros/overlay_ws/install/setup.bash
-        source /opt/ros/semantic_world-venv/bin/activate
-        cd /opt/ros/semantic_world/scripts
+        source /opt/ros/semantic_digital_twin-venv/bin/activate
+        cd /opt/ros/semantic_digital_twin/scripts
         /bin/bash test_notebook_examples.sh

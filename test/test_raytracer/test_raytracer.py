@@ -1,8 +1,8 @@
 import numpy as np
 
-from semantic_world.spatial_computations.raytracer import RayTracer
-from semantic_world.spatial_types.spatial_types import TransformationMatrix
-from semantic_world.testing import world_setup_simple
+from semantic_digital_twin.spatial_computations.raytracer import RayTracer
+from semantic_digital_twin.spatial_types.spatial_types import TransformationMatrix
+from semantic_digital_twin.testing import world_setup_simple
 
 
 def test_create_segmentation_mask(world_setup_simple):

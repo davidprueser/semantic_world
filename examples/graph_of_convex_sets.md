@@ -13,11 +13,11 @@ kernelspec:
 
 # Graph of Convex Sets
 
-This notebook walks through the way the semantic world navigates spaces that are challenging to navigate.
+This notebook walks through the way the semantic digital twin navigates spaces that are challenging to navigate.
 Usually, navigation is done in spaces that are convex, meaning that every point is reachable via a straight line without collision.
 Unfortunately, the real world is not like this.
 
-The semantic world internally represents the objects in the world using some implementation of a scene description format. 
+The semantic digital twin internally represents the objects in the world using some implementation of a scene description format. 
 These formats include collision information for every object. The collision information is often approximated using a set of boxes.
 
 These collision boxes are converted to their algebraic representation using the [random-events](https://github.com/tomsch420/random-events) package.
@@ -34,13 +34,13 @@ You can read more about GCS [here](https://arxiv.org/abs/2101.11565).
 
 Let's get hands on! First, we need to create a world that makes navigation non-trivial.
 
-```{code-cell} ipython2
-from semantic_world.world_description.geometry import Box, Scale, Color
-from semantic_world.world_description.shape_collection import ShapeCollection, BoundingBoxCollection
-from semantic_world.world_description.world_entity import Body
-from semantic_world.datastructures.prefixed_name import PrefixedName
-from semantic_world.spatial_types import TransformationMatrix
-from semantic_world.world import World
+```{code-cell} ipython3
+from semantic_digital_twin.world_description.geometry import Box, Scale, Color
+from semantic_digital_twin.world_description.shape_collection import ShapeCollection, BoundingBoxCollection
+from semantic_digital_twin.world_description.world_entity import Body
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.spatial_types import TransformationMatrix
+from semantic_digital_twin.world import World
 
 box_world = World()
 
@@ -57,10 +57,10 @@ Next, we create a connectivity graph of the space so we can solve navigation pro
 To visualize the result in a better way, we limit the search space to a finite set around the box. Furthermore, we constraint the robot to 
 be unable to fly by constraining the z-axis. Otherwise, he would get the idea to go over the box, which is not a good idea.
 
-```{code-cell} ipython2
+```{code-cell} ipython3
 from random_events.interval import SimpleInterval
-from semantic_world.world_description.graph_of_convex_sets import GraphOfConvexSets
-from semantic_world.world_description.geometry import BoundingBox
+from semantic_digital_twin.world_description.graph_of_convex_sets import GraphOfConvexSets
+from semantic_digital_twin.world_description.geometry import BoundingBox
 
 search_space = BoundingBoxCollection([BoundingBox(min_x=-1, max_x=1,
                            min_y=-1, max_y=1,
@@ -71,7 +71,7 @@ gcs = GraphOfConvexSets.free_space_from_world(box_world, search_space=search_spa
 
 Let's have a look at the free space constructed. We can see that it is a rectangular catwalk around the obstacle.
 
-```{code-cell} ipython2
+```{code-cell} ipython3
 import plotly
 plotly.offline.init_notebook_mode()
 import plotly.graph_objects as go
@@ -83,14 +83,14 @@ fig.show()
 Looking at the connectivity graph, we can see that it is still possible to go from one side of the box to the other, 
 just not directly. Intuitively, we can see that we just have to go around the obstacle.
 
-```{code-cell} ipython2
+```{code-cell} ipython3
 gcs.draw()
 ```
 
 Let's use graph theory to find a path!
 
-```{code-cell} ipython2
-from semantic_world.spatial_types import Point3
+```{code-cell} ipython3
+from semantic_digital_twin.spatial_types import Point3
 
 start = Point3(-0.75, 0, 0.15)
 goal = Point3(0.75, 0, 0.15)
@@ -100,10 +100,10 @@ print("A potential path is", [(point.x, point.y) for point in path])
 
 This minimal example demonstrates a concept that can be applied to the entire belief state of the robot. Let's load a more complex environment and look at the connectivity of it.
 
-```{code-cell} ipython2
+```{code-cell} ipython3
 import os
 from pathlib import Path
-from semantic_world.adapters.urdf import URDFParser
+from semantic_digital_twin.adapters.urdf import URDFParser
 root = next(
     parent
     for parent in [Path.cwd(), *Path.cwd().parents]
@@ -123,7 +123,7 @@ gcs = GraphOfConvexSets.free_space_from_world(world, search_space=search_space)
 
 We can now see the algebraic representation of the occupied and free space. The free space is the complement of the occupied space.
 
-```{code-cell} ipython2
+```{code-cell} ipython3
 
 from plotly.subplots import make_subplots
 
@@ -138,7 +138,7 @@ fig.show()
 
 Now let's look at the connectivity of the entire world!
 
-```{code-cell} ipython2
+```{code-cell} ipython3
 gcs.draw()
 ```
 
@@ -146,7 +146,7 @@ We can see that all spaces are somehow reachable from everywhere besides one iso
 This allows the accessing of locations using a sequence of local problems put together in an overarching trajectory!
 Finally, let's find a way from here to there:
 
-```{code-cell} ipython2
+```{code-cell} ipython3
 start = Point3(-0.75, 0, 1.15)
 goal = Point3(0.75, 0, 1.15)
 path = gcs.path_from_to(start, goal)

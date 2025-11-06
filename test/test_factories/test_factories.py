@@ -1,11 +1,18 @@
 import unittest
 from time import sleep
 
-from semantic_world.world_description.geometry import Scale
-from semantic_world.datastructures.prefixed_name import PrefixedName
-from semantic_world.spatial_types.spatial_types import TransformationMatrix
-from semantic_world.views.views import Handle, Door, Container, Drawer, Dresser, Wall
-from semantic_world.views.factories import (
+from semantic_digital_twin.world_description.geometry import Scale
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.spatial_types.spatial_types import TransformationMatrix
+from semantic_digital_twin.semantic_annotations.semantic_annotations import (
+    Handle,
+    Door,
+    Container,
+    Drawer,
+    Dresser,
+    Wall,
+)
+from semantic_digital_twin.semantic_annotations.factories import (
     HandleFactory,
     Direction,
     DoorFactory,
@@ -25,10 +32,10 @@ class TestFactories(unittest.TestCase):
 
         factory = HandleFactory(name=PrefixedName("handle"))
         world = factory.create()
-        handle_views = world.get_views_by_type(Handle)
-        self.assertEqual(len(handle_views), 1)
+        semantic_handle_annotations = world.get_semantic_annotations_by_type(Handle)
+        self.assertEqual(len(semantic_handle_annotations), 1)
 
-        handle: Handle = handle_views[0]
+        handle: Handle = semantic_handle_annotations[0]
         self.assertEqual(world.root, handle.body)
 
         # this belongs into whatever tests merge_world, and with dummy objects, not handles
@@ -37,8 +44,8 @@ class TestFactories(unittest.TestCase):
             world.merge_world(factory.create())
 
         self.assertEqual(world.root.name.name, "handle")
-        handle_views = world.get_views_by_type(Handle)
-        self.assertEqual(11, len(handle_views))
+        semantic_handle_annotations = world.get_semantic_annotations_by_type(Handle)
+        self.assertEqual(11, len(semantic_handle_annotations))
         self.assertEqual(11, len(world.bodies))
 
     def test_door_factory(self):
@@ -54,10 +61,10 @@ class TestFactories(unittest.TestCase):
             ),
         )
         world = factory.create()
-        door_views = world.get_views_by_type(Door)
-        self.assertEqual(len(door_views), 1)
+        semantic_door_annotations = world.get_semantic_annotations_by_type(Door)
+        self.assertEqual(len(semantic_door_annotations), 1)
 
-        door: Door = door_views[0]
+        door: Door = semantic_door_annotations[0]
         self.assertEqual(world.root, door.body)
         self.assertIsInstance(door.handle, Handle)
 
@@ -97,7 +104,7 @@ class TestFactories(unittest.TestCase):
             door_transforms=door_transforms,
         )
         world = factory.create()
-        doors = world.get_views_by_type(Door)
+        doors = world.get_semantic_annotations_by_type(Door)
         self.assertEqual(len(doors), 2)
         self.assertEqual(
             set(world.root.child_kinematic_structure_entities),
@@ -113,10 +120,12 @@ class TestFactories(unittest.TestCase):
     def test_container_factory(self):
         factory = ContainerFactory(name=PrefixedName("container"))
         world = factory.create()
-        container_views = world.get_views_by_type(Container)
-        self.assertEqual(len(container_views), 1)
+        semantic_container_annotations = world.get_semantic_annotations_by_type(
+            Container
+        )
+        self.assertEqual(len(semantic_container_annotations), 1)
 
-        container: Container = container_views[0]
+        container: Container = semantic_container_annotations[0]
         self.assertEqual(world.root, container.body)
 
     def test_drawer_factory(self):
@@ -133,10 +142,10 @@ class TestFactories(unittest.TestCase):
             ),
         )
         world = factory.create()
-        drawer_views = world.get_views_by_type(Drawer)
-        self.assertEqual(len(drawer_views), 1)
+        semantic_drawer_annotations = world.get_semantic_annotations_by_type(Drawer)
+        self.assertEqual(len(semantic_drawer_annotations), 1)
 
-        drawer: Drawer = drawer_views[0]
+        drawer: Drawer = semantic_drawer_annotations[0]
         self.assertEqual(world.root, drawer.container.body)
 
     def test_dresser_factory(self):
@@ -180,13 +189,13 @@ class TestFactories(unittest.TestCase):
         )
 
         world = dresser_factory.create()
-        dresser_views = world.get_views_by_type(Dresser)
-        drawers_views = world.get_views_by_type(Drawer)
-        door_views = world.get_views_by_type(Door)
-        self.assertEqual(len(drawers_views), 1)
-        self.assertEqual(len(dresser_views), 1)
-        self.assertEqual(len(door_views), 1)
-        dresser: Dresser = dresser_views[0]
+        semantic_dresser_annotations = world.get_semantic_annotations_by_type(Dresser)
+        semantic_drawer_annotations = world.get_semantic_annotations_by_type(Drawer)
+        semantic_door_annotations = world.get_semantic_annotations_by_type(Door)
+        self.assertEqual(len(semantic_drawer_annotations), 1)
+        self.assertEqual(len(semantic_dresser_annotations), 1)
+        self.assertEqual(len(semantic_door_annotations), 1)
+        dresser: Dresser = semantic_dresser_annotations[0]
         self.assertEqual(world.root, dresser.container.body)
 
     def test_wall_factory(self):
@@ -247,10 +256,10 @@ class TestFactories(unittest.TestCase):
             door_factories=[single_door_factory, double_door_factory],
         )
         world = factory.create()
-        wall_views = world.get_views_by_type(Wall)
-        self.assertEqual(len(wall_views), 1)
+        semantic_wall_annotations = world.get_semantic_annotations_by_type(Wall)
+        self.assertEqual(len(semantic_wall_annotations), 1)
 
-        wall: Wall = wall_views[0]
+        wall: Wall = semantic_wall_annotations[0]
         self.assertEqual(world.root, wall.body)
 
 
