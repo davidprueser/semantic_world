@@ -1,28 +1,25 @@
 import itertools
 import logging
 import os
-from io import BytesIO, StringIO
-from pathlib import Path
+
+import prior
 import tqdm
-from entity_query_language import Predicate
-from entity_query_language.symbolic import Variable
-from ormatic.dao import to_dao
-from ormatic.utils import recursive_subclasses, drop_database
+from krrood.ormatic.dao import to_dao, ToDAOState
+from krrood.utils import recursive_subclasses
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
-import prior
 
-from semantic_world.adapters.procthor.procthor_parser import ProcTHORParser
-from semantic_world.adapters.procthor.procthor_views import (
+from semantic_digital_twin.adapters.procthor.procthor_parser import ProcTHORParser
+from semantic_digital_twin.adapters.procthor.procthor_semantic_annotations import (
     ProcthorResolver,
     HouseholdObject,
 )
-from semantic_world.orm.ormatic_interface import *
-from semantic_world.reasoning.predicates import InsideOf
+from semantic_digital_twin.reasoning.predicates import InsideOf
+from semantic_digital_twin.orm.ormatic_interface import *
 
 
 def parse_procthor_worlds_and_calculate_containment_ratio():
-    semantic_world_database_uri = os.environ.get("SEMANTIC_WORLD_DATABASE_URI")
+    semantic_world_database_uri = os.environ.get("SEMANTIC_DIGITAL_TWIN_DATABASE_URI")
     semantic_world_engine = create_engine(semantic_world_database_uri, echo=False)
     semantic_world_session = Session(semantic_world_engine)
 
@@ -42,8 +39,8 @@ def parse_procthor_worlds_and_calculate_containment_ratio():
     for index, house in enumerate(
         tqdm.tqdm(dataset["train"], desc="Parsing Procthor worlds")
     ):
-        if index < 1850:
-            continue
+        # if index < 1850:
+        #     continue
         try:
             parser = ProcTHORParser(f"house_{index}", house, semantic_world_session)
             world = parser.parse()
@@ -55,27 +52,29 @@ def parse_procthor_worlds_and_calculate_containment_ratio():
         for body in world.bodies:
             resolved = resolver.resolve(body.name.name)
             if resolved:
-                world.add_view(resolved(body=body), exists_ok=True)
+                with world.modify_world():
+                    world.add_semantic_annotation(
+                        resolved(body=body), skip_duplicates=True
+                    )
 
-        memo = {}
+        state = ToDAOState()
         daos = []
 
-        world_dao = to_dao(world, memo=memo)
+        world_dao = to_dao(world, state=state)
         procthor_experiments_session.add(world_dao)
 
-        for body, other in itertools.product(world.bodies, world.bodies):
-            if body != other:
-                is_inside = InsideOf(body, other)
+        for kse, other in itertools.product(
+            world.kinematic_structure_entities, world.kinematic_structure_entities
+        ):
+            if kse != other:
+                is_inside = InsideOf(kse, other)
                 if is_inside() > 0.0:
-                    dao = to_dao(is_inside, memo=memo)
+                    dao = to_dao(is_inside, state=state)
                     daos.append(dao)
 
         procthor_experiments_session.add_all(daos)
         procthor_experiments_session.commit()
         procthor_experiments_session.expunge_all()
-        for c in Variable._cache_.values():
-            c.clear()
-        Variable._cache_.clear()
 
 
 if __name__ == "__main__":

@@ -399,7 +399,12 @@ class InsideOf(SpatialRelation):
         mesh_b_local = self.other.combined_mesh
 
         # Check if either mesh is empty
-        if mesh_a_local.is_empty or mesh_b_local.is_empty:
+        if (
+            mesh_a_local is None
+            or mesh_a_local.is_empty
+            or mesh_b_local is None
+            or mesh_b_local.is_empty
+        ):
             return 0.0
 
         # Transform meshes from body frame to world frame
