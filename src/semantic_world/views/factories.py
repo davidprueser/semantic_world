@@ -42,8 +42,6 @@ from ..views.views import (
     Wall,
     DoubleDoor,
     Room,
-    FloorSurface,
-    DrawerSurface,
 )
 from ..world import World
 from ..world_description.connections import (
@@ -1156,13 +1154,9 @@ class RoomFactory(ViewFactory[Room]):
             parent_T_connection_expression=TransformationMatrix(),
         )
         world.add_connection(connection)
+        room_view = Room(name=self.name)
+        room_view.surface_region = region
 
-        floor = FloorSurface(
-            name=PrefixedName(self.name.name + "_floor_surface", self.name.prefix),
-            region=region,
-        )
-        world.add_view(floor)
-        room_view = Room(name=self.name, floor=floor)
         world.add_view(room_view)
 
         return world

@@ -179,21 +179,17 @@ class PotLid(Lid):
 
 
 @dataclass(eq=False)
-class Plate(HouseholdObject):
+class Plate(HouseholdObject, SupportingSurface):
     """
     A plate.
     """
 
-    plate_surface: Optional[PlateSurface] = None
-
 
 @dataclass(eq=False)
-class Bowl(HouseholdObject):
+class Bowl(HouseholdObject, SupportingSurface):
     """
     A bowl.
     """
-
-    bowl_surface: Optional[BowlSurface] = None
 
 
 # Food Items
@@ -345,12 +341,10 @@ class Armchair(Chair):
 
 
 @dataclass(eq=False)
-class ShelvingUnit(Furniture, HouseholdObject):
+class ShelvingUnit(Furniture, HouseholdObject, SupportingSurface):
     """
     A shelving unit.
     """
-
-    shelve_surfaces: List[ShelveSurface] = field(default_factory=list)
 
 
 @dataclass(eq=False)
@@ -363,7 +357,7 @@ class Bed(Furniture, HouseholdObject):
 
 
 @dataclass(eq=False)
-class Sofa(Furniture, HouseholdObject):
+class Sofa(Furniture, HouseholdObject, SupportingSurface):
     """
     A sofa.
     """
@@ -517,22 +511,3 @@ class LiquidCap(HouseholdObject):
     """
     A liquid cap.
     """
-
-
-############################ supporting surfaces
-
-
-@dataclass(eq=False)
-class PlateSurface(SupportingSurface): ...
-
-
-@dataclass(eq=False)
-class BowlSurface(SupportingSurface): ...
-
-
-@dataclass(eq=False)
-class ShelveSurface(SupportingSurface): ...
-
-
-@dataclass(eq=False)
-class BedSurface(SupportingSurface): ...

@@ -2,22 +2,105 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from functools import cached_property
-from typing import Optional
-
 import trimesh
 from entity_query_language import symbol
 from probabilistic_model.probabilistic_circuit.rx.helper import uniform_measure_of_event
-from random_events.interval import SimpleInterval
 from typing_extensions import List
 from ..datastructures.prefixed_name import PrefixedName
-from ..utils import VisualizeTrimesh
-from ..world_description.shape_collection import BoundingBoxCollection, ShapeCollection
+from ..world_description.shape_collection import BoundingBoxCollection
 from ..spatial_types import Point3
 from ..datastructures.variables import SpatialVariables
 from ..world_description.world_entity import View, Body, Region
 import numpy as np
 
+############################### supporting surfaces
+@dataclass(eq=False)
+class SupportingSurface:
+    """
+    A view that represents a supporting surface.
+    """
 
+    @cached_property
+    def surface_region(self) -> Region:
+        """
+        Create a region that represents the object's surface.
+        """
+
+        body_exists = False
+        if hasattr(self, "body"):
+            body_exists = True
+            mesh = self.body.collision.combined_mesh
+        elif hasattr(self, "container"):
+            mesh = self.container.body.collision.combined_mesh
+        else:
+            raise ValueError("No body or container found. Cannot create surface region.")
+
+        upward_threshold = 0.95
+        clearance_threshold = 0.5
+        min_surface_area = 0.0225 # 15cm x 15cm
+
+        # --- Find upward-facing faces ---
+        normals = mesh.face_normals
+        upward_mask = normals[:, 2] > upward_threshold
+
+        if not upward_mask.any():
+            raise ValueError("No upward-facing faces found.")
+
+        # --- Find connected upward-facing regions ---
+        upward_face_indices = np.nonzero(upward_mask)[0]
+        submesh_up = mesh.submesh([upward_face_indices], append=True)
+        face_groups = submesh_up.split(only_watertight=False)
+
+        # Compute total area for each group
+        large_groups = [
+            g for g in face_groups if g.area >= min_surface_area
+        ]
+
+        if not large_groups:
+            raise ValueError("No upward-facing connected surfaces >= 15cm x 15cm found.")
+
+        # --- Merge qualifying upward-facing submeshes ---
+        candidates = trimesh.util.concatenate(large_groups)
+
+        # --- Check vertical clearance using ray casting ---
+        face_centers = candidates.triangles_center
+        ray_origins = face_centers + np.array([0, 0, 0.01])  # small upward offset
+        ray_dirs = np.tile([0, 0, 1], (len(ray_origins), 1))
+
+        locations, index_ray, _ = mesh.ray.intersects_location(
+            ray_origins=ray_origins, ray_directions=ray_dirs
+        )
+
+        # Compute distances to intersections (if any)
+        distances = np.full(len(ray_origins), np.inf)
+        distances[index_ray] = np.linalg.norm(
+            locations - ray_origins[index_ray], axis=1
+        )
+
+        # Filter faces with enough space above
+        clear_mask = (distances > clearance_threshold) | np.isinf(distances)
+
+        if not clear_mask.any():
+            raise ValueError("No upward-facing surfaces with sufficient clearance found.")
+
+        candidates_filtered = candidates.submesh([clear_mask], append=True)
+
+        # --- Build the region ---
+        points_3d = [
+            Point3(x, y, z, reference_frame=self.body if body_exists else self.container.body)
+            for x, y, z in candidates_filtered.vertices
+        ]
+
+        surface_region = Region.from_3d_points(
+            name=PrefixedName(f"{self.name.name}_surface_region"),
+            points_3d=points_3d,
+            reference_frame=self.body if body_exists else self.container.body,
+        )
+
+        return surface_region
+
+
+############################### furniture
 @symbol
 @dataclass(eq=False)
 class Container(View):
@@ -35,7 +118,7 @@ class Fridge(View):
 
 
 @dataclass(eq=False)
-class Table(View):
+class Table(View, SupportingSurface):
     """
     A view that represents a table.
     """
@@ -43,11 +126,6 @@ class Table(View):
     body: Body
     """
     The body that represents the table's top surface.
-    """
-
-    table_top_surface: Optional[TableTopSurface] = None
-    """
-    The table's top surface.
     """
 
     def points_on_table(self, amount: int = 100) -> List[Point3]:
@@ -67,18 +145,6 @@ class Table(View):
         )
         samples = np.concatenate((samples, z_coordinate), axis=1)
         return [Point3(*s, reference_frame=self.body) for s in samples]
-
-
-@dataclass(eq=False)
-class Room(View):
-    """
-    A view that represents a closed area with a specific purpose
-    """
-
-    floor: FloorSurface
-    """
-    The room's floor.
-    """
 
 
 @dataclass(eq=False)
@@ -116,6 +182,11 @@ class Furniture(View): ...
 
 #################### subclasses von Components
 
+@dataclass(eq=False)
+class Room(Components, SupportingSurface):
+    """
+    A view that represents a closed area with a specific purpose
+    """
 
 @dataclass(eq=False)
 class EntryWay(Components):
@@ -134,80 +205,9 @@ class DoubleDoor(EntryWay):
 
 @symbol
 @dataclass(eq=False)
-class Drawer(Components):
+class Drawer(Components, SupportingSurface):
     container: Container
     handle: Handle
-
-    @cached_property
-    def drawer_surface(self):
-        """
-        Create a region that represents the drawer's surface.
-        """
-
-        mesh = self.container.body.collision.combined_mesh
-        upward_threshold = 0.95
-        clearance_threshold = 0.5
-        min_surface_area = 0.0225 # 15cm x 15cm
-
-        # --- Find upward-facing faces ---
-        normals = mesh.face_normals
-        upward_mask = normals[:, 2] > upward_threshold
-
-        if not upward_mask.any():
-            raise ValueError("No upward-facing faces found.")
-
-        # --- Find connected upward-facing regions ---
-        upward_face_indices = np.nonzero(upward_mask)[0]
-        submesh_up = mesh.submesh([upward_face_indices], append=True)
-        face_groups = submesh_up.split(only_watertight=False)
-
-        # Compute total area for each group
-        large_groups = [
-            g for g in face_groups if g.area >= min_surface_area
-        ]
-
-        if not large_groups:
-            raise ValueError("No upward-facing connected surfaces ≥ 20cm x 20cm found.")
-
-        # --- Merge qualifying upward-facing submeshes ---
-        candidates = trimesh.util.concatenate(large_groups)
-
-        # --- Check vertical clearance using ray casting ---
-        face_centers = candidates.triangles_center
-        ray_origins = face_centers + np.array([0, 0, 0.01])  # small upward offset
-        ray_dirs = np.tile([0, 0, 1], (len(ray_origins), 1))
-
-        locations, index_ray, _ = mesh.ray.intersects_location(
-            ray_origins=ray_origins, ray_directions=ray_dirs
-        )
-
-        # Compute distances to intersections (if any)
-        distances = np.full(len(ray_origins), np.inf)
-        distances[index_ray] = np.linalg.norm(
-            locations - ray_origins[index_ray], axis=1
-        )
-
-        # Filter faces with enough space above
-        clear_mask = (distances > clearance_threshold) | np.isinf(distances)
-
-        if not clear_mask.any():
-            raise ValueError("No upward-facing surfaces with sufficient clearance found.")
-
-        candidates_filtered = candidates.submesh([clear_mask], append=True)
-
-        # --- Build the region ---
-        points_3d = [
-            Point3(x, y, z, reference_frame=self.container.body)
-            for x, y, z in candidates_filtered.vertices
-        ]
-
-        drawer_surface_region = Region.from_3d_points(
-            name=PrefixedName(f"{self.name.name}_surface_region"),
-            points_3d=points_3d,
-            reference_frame=self.container.body,
-        )
-
-        return drawer_surface_region
 
 
 ############################### subclasses to Furniture
@@ -238,32 +238,3 @@ class Wardrobe(Furniture):
     doors: List[Door] = field(default_factory=list)
 
 
-############################### supporting surfaces
-
-
-@dataclass(eq=False)
-class SupportingSurface(View):
-    """
-    A view that represents a supporting surface.
-    """
-
-    region: Region
-    """
-    The region that represents the supporting surface.
-    """
-
-
-@dataclass(eq=False)
-class TableTopSurface(SupportingSurface): ...
-
-
-@dataclass(eq=False)
-class SofaSurface(SupportingSurface): ...
-
-
-@dataclass(eq=False)
-class FloorSurface(SupportingSurface): ...
-
-
-@dataclass(eq=False)
-class DrawerSurface(SupportingSurface): ...
