@@ -2,21 +2,22 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from functools import cached_property
-import trimesh
+
 import numpy as np
-from krrood.entity_query_language.predicate import Symbol
+import trimesh
 from probabilistic_model.probabilistic_circuit.rx.helper import uniform_measure_of_event
 from typing_extensions import List
+
 from ..datastructures.prefixed_name import PrefixedName
-from ..world_description.shape_collection import BoundingBoxCollection
-from ..spatial_types import Point3
 from ..datastructures.variables import SpatialVariables
+from ..spatial_types import Point3
+from ..world_description.shape_collection import BoundingBoxCollection
 from ..world_description.world_entity import SemanticAnnotation, Body, Region
 
 
 ############################### supporting surfaces
 @dataclass(eq=False)
-class SupportingSurface:
+class SupportingSurface(SemanticAnnotation):
     """
     A semantic annotation that represents a supporting surface.
     """
@@ -34,11 +35,13 @@ class SupportingSurface:
         elif hasattr(self, "container"):
             mesh = self.container.body.collision.combined_mesh
         else:
-            raise ValueError("No body or container found. Cannot create surface region.")
+            raise ValueError(
+                "No body or container found. Cannot create surface region."
+            )
 
         upward_threshold = 0.95
         clearance_threshold = 0.5
-        min_surface_area = 0.0225 # 15cm x 15cm
+        min_surface_area = 0.0225  # 15cm x 15cm
 
         # --- Find upward-facing faces ---
         normals = mesh.face_normals
@@ -53,12 +56,12 @@ class SupportingSurface:
         face_groups = submesh_up.split(only_watertight=False)
 
         # Compute total area for each group
-        large_groups = [
-            g for g in face_groups if g.area >= min_surface_area
-        ]
+        large_groups = [g for g in face_groups if g.area >= min_surface_area]
 
         if not large_groups:
-            raise ValueError("No upward-facing connected surfaces >= 15cm x 15cm found.")
+            raise ValueError(
+                "No upward-facing connected surfaces >= 15cm x 15cm found."
+            )
 
         # --- Merge qualifying upward-facing submeshes ---
         candidates = trimesh.util.concatenate(large_groups)
@@ -82,13 +85,20 @@ class SupportingSurface:
         clear_mask = (distances > clearance_threshold) | np.isinf(distances)
 
         if not clear_mask.any():
-            raise ValueError("No upward-facing surfaces with sufficient clearance found.")
+            raise ValueError(
+                "No upward-facing surfaces with sufficient clearance found."
+            )
 
         candidates_filtered = candidates.submesh([clear_mask], append=True)
 
         # --- Build the region ---
         points_3d = [
-            Point3(x, y, z, reference_frame=self.body if body_exists else self.container.body)
+            Point3(
+                x,
+                y,
+                z,
+                reference_frame=self.body if body_exists else self.container.body,
+            )
             for x, y, z in candidates_filtered.vertices
         ]
 
@@ -103,7 +113,7 @@ class SupportingSurface:
 
 ############################### furniture
 @dataclass(eq=False)
-class Container(SemanticAnnotation, Symbol):
+class Container(SemanticAnnotation):
     body: Body
 
 
@@ -118,7 +128,7 @@ class Fridge(SemanticAnnotation):
 
 
 @dataclass(eq=False)
-class Table(SemanticAnnotation, SupportingSurface):
+class Table(SupportingSurface):
     """
     A semantic annotation that represents a table.
     """
@@ -161,7 +171,7 @@ class Wall(SemanticAnnotation):
 
 
 @dataclass(eq=False)
-class Handle(SemanticAnnotation, Symbol):
+class Handle(SemanticAnnotation):
     body: Body
     """
     The body that the handle is attached to.
@@ -181,11 +191,13 @@ class Furniture(SemanticAnnotation): ...
 
 #################### subclasses von Components
 
+
 @dataclass(eq=False)
 class Room(Components, SupportingSurface):
     """
     A semantic annotation that represents a closed area with a specific purpose
     """
+
 
 @dataclass(eq=False)
 class EntryWay(Components):
@@ -234,5 +246,3 @@ class Wardrobe(Furniture):
     container: Container
     drawers: List[Drawer] = field(default_factory=list, hash=False)
     doors: List[Door] = field(default_factory=list)
-
-
