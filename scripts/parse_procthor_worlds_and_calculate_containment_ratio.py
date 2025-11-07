@@ -4,6 +4,7 @@ import os
 
 import prior
 import tqdm
+from krrood.entity_query_language.symbol_graph import SymbolGraph
 from krrood.ormatic.dao import to_dao, ToDAOState
 from krrood.utils import recursive_subclasses
 from sqlalchemy import create_engine
@@ -37,10 +38,8 @@ def parse_procthor_worlds_and_calculate_containment_ratio():
 
     # Iterate through all JSON files in the directory
     for index, house in enumerate(
-        tqdm.tqdm(dataset["train"], desc="Parsing Procthor worlds")
+        tqdm.tqdm(dataset["train"][7084:], desc="Parsing Procthor worlds")
     ):
-        # if index < 1850:
-        #     continue
         try:
             parser = ProcTHORParser(f"house_{index}", house, semantic_world_session)
             world = parser.parse()
@@ -75,6 +74,8 @@ def parse_procthor_worlds_and_calculate_containment_ratio():
         procthor_experiments_session.add_all(daos)
         procthor_experiments_session.commit()
         procthor_experiments_session.expunge_all()
+        semantic_world_session.expunge_all()
+        SymbolGraph().clear()
 
 
 if __name__ == "__main__":
