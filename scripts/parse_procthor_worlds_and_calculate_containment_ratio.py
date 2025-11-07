@@ -38,8 +38,10 @@ def parse_procthor_worlds_and_calculate_containment_ratio():
 
     # Iterate through all JSON files in the directory
     for index, house in enumerate(
-        tqdm.tqdm(dataset["train"][7084:], desc="Parsing Procthor worlds")
+        tqdm.tqdm(dataset["train"], desc="Parsing Procthor worlds")
     ):
+        if index < 8718:
+            continue
         try:
             parser = ProcTHORParser(f"house_{index}", house, semantic_world_session)
             world = parser.parse()
